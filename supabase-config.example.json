@@ -1,0 +1,4 @@
+{
+  "SUPABASE_URL": "https://xkxbmiwnufyfacviquza.supabase.co",
+  "note": "Anon key embedded in app.js. Never commit service_role key."
+}

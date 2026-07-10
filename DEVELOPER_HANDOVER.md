@@ -89,3 +89,20 @@ Saldo rule locked:
 - Final balance must never be negative.
 - Approval is double-checked again when customer enters PIN.
 - Supabase production must use atomic RPC / row lock for deduct balance.
+
+
+## Update v0.6 Supabase Connected
+Frontend actions now call Supabase RPC functions:
+- mvp_staff_login
+- mvp_generate_gift_code
+- mvp_claim_gift_code
+- mvp_search_member
+- mvp_topup_member
+- mvp_create_approval_request
+- mvp_get_approval
+- mvp_approve_balance_use
+- mvp_reject_approval
+- mvp_recent_transactions
+
+Required base URL: https://xkxbmiwnufyfacviquza.supabase.co
+RLS must remain enabled. Do not expose service_role key.
