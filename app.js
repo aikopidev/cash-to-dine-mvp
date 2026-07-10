@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -186,8 +186,64 @@ async function renderSuccess(){
   const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); try{ const rows=await rpc("mvp_get_approval",{p_token:params.token}); const p=rows&&rows[0]; if(!p) throw new Error("Approval not found"); screen(`<section class="card"><h1>Saldo Berhasil Dipakai ✅</h1><div class="item"><div class="title">Member</div><div class="meta">${p.member_name} • ${p.member_phone}</div></div><div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div><div class="item"><div class="title">Saldo Sisa</div><div class="meta">${money(p.balance_after)}</div></div><div class="notice">Kasir tetap validasi manual di POS: masukkan payment Voucher/Cash to Dine sebesar ${money(p.balance_used)}. Sisa bill, kalau ada, dibayar QRIS/Cash/Card di POS.</div><button class="full" style="margin-top:12px" onclick="setHash('kasir')">Transaksi Baru</button></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
 }
 
-async function renderOwner(){ const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("owner"); screen(`<section class="card"><h1>Owner Dashboard</h1><p>${OUTLET} • Supabase connected.</p><div class="grid two"><button onclick="setHash('gift-generate')">Generate Gift Code</button><button class="secondary" onclick="setHash('report')">Transaction Report</button></div></section><section class="card"><h3>Database Status</h3><div class="success">Connected to Supabase: ${SUPABASE_URL}</div><p>Untuk dashboard metric lengkap, next iteration perlu RPC summary report.</p></section>`); }
+async function renderOwner(){
+  const u=requireLogin(); if(!u)return;
+  if(u.role!=="owner"){setHash("kasir");return;}
+  mountLayout(); setNav("owner");
+  screen(`
+    <section class="card">
+      <h1>Owner Dashboard</h1>
+      <p>${OUTLET} • Supabase connected. Ringkasan operasional member, voucher, dan saldo.</p>
+      <div id="dashboard-summary" class="dashboard-grid">
+        <div class="dashboard-card"><div class="label">Members</div><div class="value">-</div></div>
+        <div class="dashboard-card"><div class="label">Total Saldo Member</div><div class="value">-</div></div>
+        <div class="dashboard-card"><div class="label">Voucher Available</div><div class="value">-</div></div>
+        <div class="dashboard-card"><div class="label">Voucher Terdaftar / Claimed</div><div class="value">-</div></div>
+      </div>
+    </section>
 
+    <section class="card">
+      <h2>Quick Access</h2>
+      <div class="action-grid">
+        <button class="action-card" onclick="setHash('members')">
+          <div class="title">All Members</div>
+          <div class="desc">Lihat semua member yang pernah daftar, lengkap dengan nama, nomor telpon, saldo, dan export TXT/PDF.</div>
+        </button>
+        <button class="action-card" onclick="setHash('gift-generate')">
+          <div class="title">Voucher Control</div>
+          <div class="desc">Monitor voucher available, terdaftar, claimed, expired, deleted. Copy WA per voucher.</div>
+        </button>
+        <button class="action-card" onclick="setHash('report')">
+          <div class="title">Transaction Report</div>
+          <div class="desc">Lihat transaksi top up, gift claim, dan penggunaan saldo.</div>
+        </button>
+        <button class="action-card" onclick="setHash('kasir')">
+          <div class="title">Kasir Mode</div>
+          <div class="desc">Search member, top up, request saldo, dan approval QR.</div>
+        </button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>System Status</h2>
+      <div class="success">Connected to Supabase: ${SUPABASE_URL}</div>
+      <p class="meta">Dashboard ini mengambil data langsung dari cloud, bukan local browser.</p>
+    </section>
+  `);
+
+  try{
+    const rows = await rpc("mvp_owner_dashboard_summary", {p_staff_id:u.id});
+    const s = rows && rows[0] ? rows[0] : {};
+    byId("dashboard-summary").innerHTML = `
+      <div class="dashboard-card"><div class="label">Total Members</div><div class="value">${s.total_members || 0}</div></div>
+      <div class="dashboard-card"><div class="label">Total Saldo Member</div><div class="value">${money(s.total_wallet_balance || 0)}</div></div>
+      <div class="dashboard-card"><div class="label">Voucher Available</div><div class="value">${s.available_vouchers || 0}</div></div>
+      <div class="dashboard-card"><div class="label">Terdaftar / Claimed</div><div class="value">${Number(s.registered_vouchers || 0) + Number(s.claimed_vouchers || 0)}</div></div>
+    `;
+  }catch(err){
+    byId("dashboard-summary").innerHTML = `<div class="error" style="grid-column:1/-1">${err.message}</div>`;
+  }
+}
 async function renderGiftGenerate(){
   const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("gift");
   screen(`
@@ -420,8 +476,8 @@ async function renderMembers(){
   const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("members");
   screen(`
     <section class="card">
-      <h1>Member Directory</h1>
-      <p>Semua member yang pernah daftar. Bisa export TXT atau buka versi print untuk Save as PDF.</p>
+      <h1>All Members</h1>
+      <p>List simple semua member yang pernah daftar. Data langsung dari Supabase.</p>
       <div class="voucher-toolbar">
         <input id="member-query" placeholder="Search nama / nomor HP..." autocomplete="off" />
         <button class="secondary" id="export-txt" type="button">Export TXT</button>
@@ -429,30 +485,58 @@ async function renderMembers(){
         <button class="ghost" id="refresh-members" type="button">Refresh</button>
       </div>
       <div id="member-summary" class="success">Loading member...</div>
-      <div id="member-list" class="list" style="margin-top:12px"></div>
+    </section>
+    <section class="card">
+      <h2>Member List</h2>
+      <div id="member-list"></div>
     </section>
   `);
 
   let members = [];
 
-  function renderMemberRows(){
+  function visibleRows(){
     const q = byId("member-query").value.trim().toLowerCase();
-    const rows = members.filter(m =>
-      !q || String(m.name||"").toLowerCase().includes(q) || String(m.phone||"").includes(q)
+    return members.filter(m =>
+      !q || String(m.name||"").toLowerCase().includes(q) || String(m.phone||"").includes(q) || String(m.member_code||"").toLowerCase().includes(q)
     );
-    byId("member-summary").innerHTML = `<b>${rows.length}</b> member ditampilkan dari total <b>${members.length}</b> member.`;
+  }
+
+  function renderMemberRows(){
+    const rows = visibleRows();
+    const totalBalance = rows.reduce((a,m)=>a+Number(m.balance||0),0);
+    byId("member-summary").innerHTML = `<b>${rows.length}</b> member ditampilkan dari total <b>${members.length}</b> member • Total saldo tampil: <b>${money(totalBalance)}</b>`;
     if(!rows.length){
       byId("member-list").innerHTML = `<div class="notice">Tidak ada member.</div>`;
       return;
     }
-    byId("member-list").innerHTML = rows.map(m => `
-      <div class="member-row">
-        <div><div class="name">${m.name || "-"}</div><div class="meta">${m.member_code || "-"}</div></div>
-        <div class="phone">${m.phone || "-"}</div>
-        <div class="money">${money(m.balance || 0)}</div>
-        <div><span class="status-pill available">${(m.status || "active").toUpperCase()}</span></div>
+    byId("member-list").innerHTML = `
+      <div class="member-table-wrap">
+        <table class="member-table">
+          <thead>
+            <tr>
+              <th>No</th>
+              <th>Nama</th>
+              <th>No Telpon</th>
+              <th>Member ID</th>
+              <th>Saldo</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((m,i)=>`
+              <tr>
+                <td>${i+1}</td>
+                <td class="name">${m.name || "-"}</td>
+                <td>${m.phone || "-"}</td>
+                <td>${m.member_code || "-"}</td>
+                <td><b>${money(m.balance || 0)}</b></td>
+                <td>${m.status || "active"}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+        </table>
       </div>
-    `).join("");
+    `;
   }
 
   function memberText(rows){
@@ -462,16 +546,9 @@ async function renderMembers(){
     lines.push(`Total: ${rows.length} member`);
     lines.push("");
     rows.forEach((m,i)=>{
-      lines.push(`${i+1}. ${m.name || "-"} | ${m.phone || "-"} | ${m.member_code || "-"} | Saldo: ${money(m.balance || 0)}`);
+      lines.push(`${i+1}. ${m.name || "-"} | ${m.phone || "-"} | ${m.member_code || "-"} | Saldo: ${money(m.balance || 0)} | Status: ${m.status || "active"}`);
     });
     return lines.join("\n");
-  }
-
-  function visibleRows(){
-    const q = byId("member-query").value.trim().toLowerCase();
-    return members.filter(m =>
-      !q || String(m.name||"").toLowerCase().includes(q) || String(m.phone||"").includes(q)
-    );
   }
 
   async function loadMembers(){
@@ -521,7 +598,6 @@ async function renderMembers(){
 
   await loadMembers();
 }
-
 async function renderReport(){
   const u=requireLogin(); if(!u)return; mountLayout(); setNav("report"); screen(`<section class="card"><h1>Loading report...</h1></section>`); try{ const rows=await rpc("mvp_recent_transactions",{p_staff_id:u.id}); screen(`<section class="card"><h1>Transaction Report</h1><div class="list">${rows&&rows.length?rows.map(t=>`<div class="item"><div class="title">${t.type} • ${money(t.balance_used||t.credit_issued||0)}</div><div class="meta">${t.member_name||"-"} • ${t.member_phone||"-"} • ${new Date(t.created_at).toLocaleString("id-ID")}</div><div class="meta">Status: ${t.status}</div></div>`).join(""):`<p>Belum ada transaksi.</p>`}</div></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
 }

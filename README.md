@@ -154,3 +154,13 @@ Member Directory:
   - updated `mvp_claim_gift_code`
   - updated `mvp_approve_balance_use`
   - updated voucher list/generate/delete functions
+
+
+## Update v1.2 Owner Dashboard + Member Directory
+- Owner dashboard now has clear KPI cards.
+- Dashboard has big action cards for All Members, Voucher Control, Transaction Report, and Kasir Mode.
+- Members page now uses a clearer table layout.
+- Members page shows Nama, No Telpon, Member ID, Saldo, Status.
+- Export TXT and PDF/Print remain available.
+- Required SQL RPC:
+  - `mvp_owner_dashboard_summary(uuid)`
