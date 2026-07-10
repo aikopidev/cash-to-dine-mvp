@@ -1,6 +1,7 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "1.6.0";
-const OUTLET = "Cacayo";
+const APP_VERSION = "1.7.0";
+const OUTLET = "CACAYO";
+const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const SESSION_KEY = "ctd_v06_session";
@@ -10,6 +11,8 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 function money(n){ return "Rp" + Number(n || 0).toLocaleString("id-ID"); }
 function parseMoney(v){ return typeof v === "number" ? v : (Number(String(v||"").replace(/[^0-9]/g,"")) || 0); }
 function byId(id){ return document.getElementById(id); }
+function brandMiniHtml(){ return `<div class="mini-brand"><img src="./cacayo-logo.jpg" alt="CACAYO logo"/><div><b>CACAYO</b><span>CHINESE CALIFORNIAN FUSION FOOD</span></div></div>`; }
+function brandLine(){ return OUTLET_FULL; }
 function randomCode(len=8){ let c=""; for(let i=0;i<len;i++) c += SAFE_ALPHABET[Math.floor(Math.random()*SAFE_ALPHABET.length)]; return c; }
 function memberSeq(){ return "CTD-" + Date.now().toString().slice(-6); }
 function publicBaseUrl(){ return `${location.origin}${location.pathname}`; }
@@ -37,7 +40,7 @@ async function rpc(fn, body={}){
 
 function mountLayout(){
   byId("app").innerHTML = byId("layout-template").innerHTML;
-  byId("outlet-name").textContent = `${OUTLET} • Supabase v${APP_VERSION}`;
+  byId("outlet-name").textContent = `${OUTLET_FULL} • Supabase v${APP_VERSION}`;
   byId("logout-btn").onclick = ()=>{ clearSession(); setHash("login"); };
 }
 function screen(html){ byId("screen").innerHTML = html; }
@@ -157,10 +160,58 @@ async function renderMember(){
 }
 
 function renderJoin(){
-  const session=currentUser(); if(session){ mountLayout(); setNav("register"); } else { byId("app").innerHTML=`<main style="padding:16px;max-width:520px;margin:auto"></main>`; }
-  const {params}=getRoute(); const target=session?byId("screen"):document.querySelector("main");
-  target.innerHTML = `<section class="card"><h1>Daftar Member Baru</h1><p>Masukkan Gift Code 8 digit. Setelah daftar berhasil, saldo gift otomatis masuk ke akun membership kamu.</p><form id="register-form"><label>Nama Lengkap</label><input id="name" placeholder="Nama customer" required/><label>No HP</label><input id="phone" inputmode="numeric" placeholder="628xxxxxxxxxx" value="${params.phone||""}" required/><label>Password / PIN Membership</label><input id="pass" type="password" placeholder="Minimal 6 karakter" required/><label>Gift Code / Invite Code</label><input id="gift" class="code-box" placeholder="A7K9P2QX" value="${params.code||""}" required/><button class="full" style="margin-top:14px">Daftar Sekarang</button></form><div id="register-result" style="margin-top:12px"></div>${!session?`<button class="ghost full" style="margin-top:12px" onclick="setHash('login')">Ke Login</button>`:""}</section>`;
-  byId("register-form").onsubmit = async (e)=>{ e.preventDefault(); const box=byId("register-result"); const pass=byId("pass").value; if(pass.length<6){ box.innerHTML=`<div class="error">Password/PIN minimal 6 karakter.</div>`; return; } box.innerHTML=`<div class="notice">Mendaftarkan member...</div>`; try{ const memberCode=memberSeq(); const rows=await rpc("mvp_claim_gift_code",{p_outlet_slug:OUTLET_SLUG,p_member_code:memberCode,p_name:byId("name").value.trim(),p_phone:normalizePhone(byId("phone").value),p_password:pass,p_gift_code:byId("gift").value.trim().toUpperCase()}); const d=rows&&rows[0]?rows[0]:{}; box.innerHTML=`<div class="success"><b>Membership Active ✅</b><br>Member ID: ${d.member_code||memberCode}<br>Saldo Awal: ${money(d.initial_balance||0)}<br>Gift Code: USED</div><button class="full" style="margin-top:10px" onclick="setHash('login')">Selesai</button>`; }catch(err){ box.innerHTML=`<div class="error">${err.message}</div>`; } };
+  const session=currentUser();
+  if(session){ mountLayout(); setNav("register"); } else { byId("app").innerHTML=`<main style="padding:16px;max-width:520px;margin:auto"></main>`; }
+  const {params}=getRoute();
+  const target=session?byId("screen"):document.querySelector("main");
+  target.innerHTML = `
+    <section class="card">
+      ${!session ? brandMiniHtml() : ""}
+      <h1>Daftar Member Baru</h1>
+      <p>Masukkan Gift Code. Setelah daftar, saldo otomatis masuk ke akun member.</p>
+      <div class="notice"><b>PIN wajib 6 digit angka.</b><br>MOHON PIN DI INGAT / DI SCREENSHOT karena PIN dipakai untuk approve transaksi saldo.</div>
+      <form id="register-form">
+        <label>Nama Lengkap</label>
+        <input id="name" placeholder="Nama customer" required/>
+        <label>No HP</label>
+        <input id="phone" inputmode="numeric" placeholder="628xxxxxxxxxx" value="${params.phone||""}" required/>
+        <label>PIN Membership 6 Digit</label>
+        <input id="pass" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="Contoh: 123456" required/>
+        <div class="search-hint">MOHON PIN DI INGAT / DI SCREENSHOT.</div>
+        <label>Gift Code / Invite Code</label>
+        <input id="gift" class="code-box" placeholder="A7K9P2QX3" value="${params.code||""}" required/>
+        <button class="full" style="margin-top:14px">Daftar Sekarang</button>
+      </form>
+      <div id="register-result" style="margin-top:12px"></div>
+      ${!session?`<button class="ghost full" style="margin-top:12px" onclick="setHash('login')">Staff Login</button>`:""}
+    </section>
+  `;
+
+  byId("register-form").onsubmit = async (e)=>{
+    e.preventDefault();
+    const box=byId("register-result");
+    const pass=byId("pass").value.trim();
+    if(!/^[0-9]{6}$/.test(pass)){
+      box.innerHTML=`<div class="error">PIN wajib 6 digit angka. MOHON PIN DI INGAT / DI SCREENSHOT.</div>`;
+      return;
+    }
+    box.innerHTML=`<div class="notice">Mendaftarkan member...</div>`;
+    try{
+      const memberCode=memberSeq();
+      const rows=await rpc("mvp_claim_gift_code",{
+        p_outlet_slug:OUTLET_SLUG,
+        p_member_code:memberCode,
+        p_name:byId("name").value.trim(),
+        p_phone:normalizePhone(byId("phone").value),
+        p_password:pass,
+        p_gift_code:byId("gift").value.trim().toUpperCase()
+      });
+      const d=rows&&rows[0]?rows[0]:{};
+      box.innerHTML=`<div class="success"><b>Membership Active ✅</b><br>Member ID: ${d.member_code||memberCode}<br>Saldo Awal: ${money(d.initial_balance||0)}<br>Gift Code: TERDAFTAR<br><br><b>MOHON PIN DI INGAT / DI SCREENSHOT.</b></div><button class="full" style="margin-top:10px" onclick="setHash('login')">Selesai</button>`;
+    }catch(err){
+      box.innerHTML=`<div class="error">${err.message}</div>`;
+    }
+  };
 }
 
 async function renderTopup(){
@@ -181,25 +232,29 @@ async function renderTopup(){
       <section class="card">
         <h2>Pilih Paket Top Up</h2>
         <div class="simple-topup-grid" id="package-grid">
-          <button type="button" class="simple-topup-card diamond active" data-package="DIAMOND" data-paid="5000000" data-credit="10000000">
-            <div class="top"><div class="name">💎 DIAMOND</div><div class="badge">BEST</div></div>
-            <div class="pay">Bayar Rp5.000.000</div>
-            <div class="credit">Dapat saldo Rp10.000.000</div>
+          <button type="button" class="simple-topup-card nickel active" data-package="NICKEL" data-paid="1000000" data-credit="1050000" data-valid-months="2">
+            <div class="top"><div class="name">⚙️ NICKEL</div><div class="badge">+5%</div></div>
+            <div class="pay">Bayar Rp1.000.000</div>
+            <div class="credit">Dapat saldo Rp1.050.000</div>
+            <div class="validity">Valid 2 bulan</div>
           </button>
-          <button type="button" class="simple-topup-card gold" data-package="GOLD" data-paid="2000000" data-credit="3500000">
-            <div class="top"><div class="name">🏆 GOLD</div><div class="badge">POPULAR</div></div>
+          <button type="button" class="simple-topup-card silver" data-package="SILVER" data-paid="2000000" data-credit="2200000" data-valid-months="2">
+            <div class="top"><div class="name">🥈 SILVER</div><div class="badge">+10%</div></div>
             <div class="pay">Bayar Rp2.000.000</div>
-            <div class="credit">Dapat saldo Rp3.500.000</div>
+            <div class="credit">Dapat saldo Rp2.200.000</div>
+            <div class="validity">Valid 2 bulan</div>
           </button>
-          <button type="button" class="simple-topup-card silver" data-package="SILVER" data-paid="500000" data-credit="700000">
-            <div class="top"><div class="name">🥈 SILVER</div><div class="badge">STARTER</div></div>
-            <div class="pay">Bayar Rp500.000</div>
-            <div class="credit">Dapat saldo Rp700.000</div>
+          <button type="button" class="simple-topup-card gold" data-package="GOLD" data-paid="3000000" data-credit="3450000" data-valid-months="4">
+            <div class="top"><div class="name">🏆 GOLD</div><div class="badge">+15%</div></div>
+            <div class="pay">Bayar Rp3.000.000</div>
+            <div class="credit">Dapat saldo Rp3.450.000</div>
+            <div class="validity">Valid 4 bulan</div>
           </button>
-          <button type="button" class="simple-topup-card custom" data-package="CUSTOM" data-paid="custom" data-credit="custom">
-            <div class="top"><div class="name">✍️ CUSTOM</div><div class="badge">MANUAL</div></div>
-            <div class="pay">Input manual</div>
-            <div class="credit">Nominal bebas</div>
+          <button type="button" class="simple-topup-card diamond" data-package="DIAMOND" data-paid="4000000" data-credit="4800000" data-valid-months="4">
+            <div class="top"><div class="name">💎 DIAMOND</div><div class="badge">+20%</div></div>
+            <div class="pay">Bayar Rp4.000.000</div>
+            <div class="credit">Dapat saldo Rp4.800.000</div>
+            <div class="validity">Valid 4 bulan</div>
           </button>
         </div>
 
@@ -207,11 +262,11 @@ async function renderTopup(){
           <div class="grid two">
             <div>
               <label>Uang Diterima Kasir</label>
-              <input id="cashPaid" inputmode="numeric" value="5000000" />
+              <input id="cashPaid" inputmode="numeric" value="1000000" />
             </div>
             <div>
               <label>Saldo yang Diberikan</label>
-              <input id="creditIssued" inputmode="numeric" value="10000000" />
+              <input id="creditIssued" inputmode="numeric" value="1050000" />
             </div>
           </div>
           <label>Invoice Number dari POS</label>
@@ -223,24 +278,22 @@ async function renderTopup(){
       </section>
     `);
 
-    let selectedPackage = "DIAMOND";
+    let selectedPackage = "NICKEL";
+    let selectedValidMonths = 2;
 
     function refreshPreview(){
       const paid=parseMoney(byId("cashPaid").value), credit=parseMoney(byId("creditIssued").value);
-      byId("topup-preview").innerHTML=`Paket: <b>${selectedPackage}</b><br>Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>.<br>Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.`;
+      byId("topup-preview").innerHTML=`Paket: <b>${selectedPackage}</b> • Valid <b>${selectedValidMonths} bulan</b><br>Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>.<br>Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.`;
     }
 
     document.querySelectorAll(".simple-topup-card").forEach(btn=>{
       btn.onclick=()=>{
         document.querySelectorAll(".simple-topup-card").forEach(b=>b.classList.remove("active"));
         btn.classList.add("active");
-        selectedPackage = btn.dataset.package || "CUSTOM";
-        if(btn.dataset.paid!=="custom"){
-          byId("cashPaid").value=btn.dataset.paid;
-          byId("creditIssued").value=btn.dataset.credit;
-        }else{
-          byId("cashPaid").focus();
-        }
+        selectedPackage = btn.dataset.package || "NICKEL";
+        selectedValidMonths = Number(btn.dataset.validMonths || 2);
+        byId("cashPaid").value=btn.dataset.paid;
+        byId("creditIssued").value=btn.dataset.credit;
         refreshPreview();
       };
     });
@@ -272,9 +325,10 @@ async function renderTopup(){
           p_cash_paid:paid,
           p_credit_issued:credit,
           p_invoice_number:invoiceNumber,
-          p_package_name:selectedPackage
+          p_package_name:selectedPackage,
+          p_valid_months:selectedValidMonths
         });
-        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Paket: <b>${selectedPackage}</b><br>Invoice POS: <b>${invoiceNumber}</b><br>Saldo baru member: <b>${money(newBalance)}</b>.</div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${member.phone}'})">Lihat Member</button></div>`;
+        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Paket: <b>${selectedPackage}</b> • Valid ${selectedValidMonths} bulan<br>Invoice POS: <b>${invoiceNumber}</b><br>Saldo baru member: <b>${money(newBalance)}</b>.</div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${member.phone}'})">Lihat Member</button></div>`;
       }catch(err){
         box.innerHTML=`<div class="error">${err.message}</div>`;
       }
@@ -303,21 +357,13 @@ async function renderWaiting(){
 function customerTopupInfoHtml(){
   return `
     <section class="card">
-      <h2>Tambah Saldo Dining Credit</h2>
+      <h2>Tambah Saldo</h2>
       <p>Top up tetap dilakukan di kasir/POS. Tunjukkan halaman ini ke kasir untuk tambah saldo.</p>
       <div class="customer-topup-grid">
-        <div class="customer-topup-card">
-          <div class="title">💎 DIAMOND</div>
-          <div class="desc">Bayar Rp5.000.000 → Saldo Rp10.000.000</div>
-        </div>
-        <div class="customer-topup-card">
-          <div class="title">🏆 GOLD</div>
-          <div class="desc">Bayar Rp2.000.000 → Saldo Rp3.500.000</div>
-        </div>
-        <div class="customer-topup-card">
-          <div class="title">🥈 SILVER</div>
-          <div class="desc">Bayar Rp500.000 → Saldo Rp700.000</div>
-        </div>
+        <div class="customer-topup-card"><div class="title">⚙️ NICKEL</div><div class="desc">Bayar Rp1.000.000 → Saldo Rp1.050.000 • Valid 2 bulan</div></div>
+        <div class="customer-topup-card"><div class="title">🥈 SILVER</div><div class="desc">Bayar Rp2.000.000 → Saldo Rp2.200.000 • Valid 2 bulan</div></div>
+        <div class="customer-topup-card"><div class="title">🏆 GOLD</div><div class="desc">Bayar Rp3.000.000 → Saldo Rp3.450.000 • Valid 4 bulan</div></div>
+        <div class="customer-topup-card"><div class="title">💎 DIAMOND</div><div class="desc">Bayar Rp4.000.000 → Saldo Rp4.800.000 • Valid 4 bulan</div></div>
       </div>
       <div class="customer-topup-note">Hubungi kasir untuk top up. Pembayaran dan invoice tetap melalui POS.</div>
     </section>
@@ -338,8 +384,9 @@ async function renderCustomerHome(){
     const saldo = p.balance_after ?? p.balance_before ?? 0;
     target.innerHTML=`
       <section class="card">
+        ${brandMiniHtml()}
         <div class="customer-home-header">
-          <h1>${OUTLET} Dining Club</h1>
+          <h1>${OUTLET_FULL}</h1>
           <p>${p.member_name || "Member"} • ${p.member_phone || ""}</p>
         </div>
         <div class="kpi"><div class="label">Saldo Saat Ini</div><div class="value">${money(saldo)}</div></div>
@@ -366,8 +413,9 @@ async function renderApprove(){
 
     target.innerHTML=`
       <section class="card">
+        ${brandMiniHtml()}
         <h1>Approve Pemakaian Saldo</h1>
-        <p>${OUTLET} Dining Club</p>
+        <p>${OUTLET_FULL}</p>
         <div class="approval-alert">
           <div style="font-weight:900">⚠️ Permintaan Pemakaian Saldo</div>
           <div class="big-money">${money(p.balance_used)}</div>
@@ -376,8 +424,8 @@ async function renderApprove(){
         </div>
         <div class="item"><div class="title">Member</div><div class="meta">${p.member_name} • ${p.member_phone}</div></div>
         <form id="approve-form">
-          <label>Password / PIN Membership</label>
-          <input id="pass" type="password" placeholder="Password customer" required/>
+          <label>PIN Membership 6 Digit</label>
+          <input id="pass" type="password" inputmode="numeric" maxlength="6" placeholder="Masukkan PIN 6 digit" required/>
           <button class="ok full" style="margin-top:14px">Approve Pemakaian Saldo</button>
         </form>
         <button class="ghost full" style="margin-top:8px" id="rejectBtn">Tolak</button>
@@ -409,6 +457,7 @@ async function renderApprove(){
 
         target.innerHTML=`
           <section class="card">
+            ${brandMiniHtml()}
             <div class="customer-home-header">
               <div class="check">✓</div>
               <h1>Saldo Berhasil Dipakai</h1>

@@ -216,3 +216,17 @@ Member Directory:
   - instruction: Hubungi kasir untuk top up
 - Added public `customer-home?token=...` route.
 - Fixed missing `members` route in router.
+
+
+## Update v1.7 CACAYO Branding + Final Top Up Package
+- Small CACAYO logo added to UI.
+- Brand line updated to `CACAYO CHINESE CALIFORNIAN FUSION FOOD`.
+- Top up packages updated:
+  - NICKEL: bayar Rp1.000.000 → saldo Rp1.050.000, valid 2 bulan
+  - SILVER: bayar Rp2.000.000 → saldo Rp2.200.000, valid 2 bulan
+  - GOLD: bayar Rp3.000.000 → saldo Rp3.450.000, valid 4 bulan
+  - DIAMOND: bayar Rp4.000.000 → saldo Rp4.800.000, valid 4 bulan
+- CUSTOM package removed.
+- Registration PIN must be exactly 6 digits.
+- Customer is warned: `MOHON PIN DI INGAT / DI SCREENSHOT`.
+- Top up transaction metadata stores package name and valid months.

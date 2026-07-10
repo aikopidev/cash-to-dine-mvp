@@ -662,3 +662,62 @@ button:disabled{
     grid-template-columns:1fr;
   }
 }
+
+
+/* v1.7 CACAYO Branding + Final Top Up Packages */
+.topbar-brand-wrap{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+}
+.brand-logo{
+  width:34px;
+  height:34px;
+  border-radius:9px;
+  object-fit:contain;
+  background:#fff;
+  border:1px solid var(--line);
+  padding:2px;
+  opacity:.88;
+  flex:0 0 auto;
+}
+.mini-brand{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:14px;
+}
+.mini-brand img{
+  width:42px;
+  height:42px;
+  object-fit:contain;
+  border-radius:10px;
+  border:1px solid var(--line);
+  background:#fff;
+  padding:2px;
+}
+.mini-brand b{
+  display:block;
+  font-size:15px;
+  letter-spacing:.02em;
+}
+.mini-brand span{
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.04em;
+}
+.simple-topup-card.nickel{
+  border-left:7px solid #64748b;
+}
+.simple-topup-card .validity{
+  font-size:13px;
+  font-weight:900;
+  color:#475569;
+  margin-top:4px;
+}
+.customer-topup-grid{
+  grid-template-columns:1fr;
+}
