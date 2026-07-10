@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "1.0.0";
+const APP_VERSION = "1.1.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -193,18 +193,19 @@ async function renderGiftGenerate(){
   screen(`
     <section class="card">
       <h1>Voucher Control Center</h1>
-      <p>Monitor voucher lama dan baru. 10 voucher per page. Voucher used akan abu-abu. Voucher available bisa dicopy WA atau di-delete/void kalau belum dishare.</p>
+      <p>Monitor voucher lama dan baru. 10 voucher per page. Voucher terdaftar/claimed akan terkunci. Voucher available bisa dicopy WA atau di-delete/void kalau belum dishare.</p>
       <div id="voucher-summary" class="voucher-summary">
         <div class="stat"><div class="label">Total</div><div class="value">-</div></div>
         <div class="stat"><div class="label">Available</div><div class="value">-</div></div>
-        <div class="stat"><div class="label">Used</div><div class="value">-</div></div>
+        <div class="stat"><div class="label">Terdaftar</div><div class="value">-</div></div>
         <div class="stat"><div class="label">Available Value</div><div class="value">-</div></div>
       </div>
       <div class="voucher-toolbar">
         <select id="voucher-filter">
           <option value="available">Available</option>
           <option value="all">All status</option>
-          <option value="used">Used</option>
+          <option value="registered">Terdaftar</option>
+          <option value="claimed">Claimed</option>
           <option value="expired">Expired</option>
           <option value="void">Deleted / Void</option>
         </select>
@@ -250,7 +251,10 @@ async function renderGiftGenerate(){
   let totalCount = 0;
 
   function voucherStatusClass(s){
-    return s === "used" ? "used" : (s === "expired" ? "expired" : (s === "void" ? "void" : "available"));
+    if(s === "registered") return "registered";
+    if(s === "claimed") return "claimed";
+    if(s === "used") return "registered"; // legacy status
+    return s === "expired" ? "expired" : (s === "void" ? "void" : "available");
   }
 
   function waMessageFor(code, value){
@@ -272,13 +276,14 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
   function renderSummaryFromRows(rows){
     // Summary visible here is based on current filter/page for speed.
     const available = rows.filter(v=>v.voucher_status==="available").length;
-    const used = rows.filter(v=>v.voucher_status==="used").length;
+    const registered = rows.filter(v=>v.voucher_status==="registered" || v.voucher_status==="used").length;
+    const claimed = rows.filter(v=>v.voucher_status==="claimed").length;
     const availableValue = rows.filter(v=>v.voucher_status==="available").reduce((a,v)=>a+Number(v.value||0),0);
     byId("voucher-summary").innerHTML = `
       <div class="stat"><div class="label">Total Filter</div><div class="value">${totalCount}</div></div>
       <div class="stat"><div class="label">Available Page</div><div class="value">${available}</div></div>
-      <div class="stat"><div class="label">Used Page</div><div class="value">${used}</div></div>
-      <div class="stat"><div class="label">Available Value Page</div><div class="value">${money(availableValue)}</div></div>
+      <div class="stat"><div class="label">Terdaftar Page</div><div class="value">${registered}</div></div>
+      <div class="stat"><div class="label">Claimed Page</div><div class="value">${claimed}</div></div>
     `;
   }
 
@@ -299,9 +304,13 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
     byId("voucher-list").innerHTML = currentRows.map(v => {
       const cls = voucherStatusClass(v.voucher_status);
       const isAvailable = v.voucher_status === "available";
-      const usedInfo = v.voucher_status === "used"
-        ? `<div class="meta">Used by: ${v.used_by_name || "-"} • ${v.used_by_phone || "-"}</div>`
-        : (isAvailable ? `<div class="meta">Link: ${joinBase}${v.code}</div>` : `<div class="meta">Status: ${v.voucher_status}</div>`);
+      const isRegistered = v.voucher_status === "registered" || v.voucher_status === "used";
+      const isClaimed = v.voucher_status === "claimed";
+      const usedInfo = isRegistered
+        ? `<div class="meta">Terdaftar oleh: ${v.used_by_name || "-"} • ${v.used_by_phone || "-"}</div>`
+        : (isClaimed
+          ? `<div class="meta">Claimed by: ${v.used_by_name || "-"} • ${v.used_by_phone || "-"}</div>`
+          : (isAvailable ? `<div class="meta">Link: ${joinBase}${v.code}</div>` : `<div class="meta">Status: ${v.voucher_status}</div>`));
 
       const actions = isAvailable
         ? `<div class="voucher-actions">
@@ -309,7 +318,7 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
              <button class="ghost" type="button" onclick="window.copyVoucherLink('${v.code}')">Copy Link</button>
              <button class="danger" type="button" onclick="window.deleteVoucher('${v.gift_id}', '${v.code}')">Delete</button>
            </div>`
-        : `<div class="voucher-actions"><span class="badge">${v.voucher_status === "used" ? "Already used" : "Not active"}</span></div>`;
+        : `<div class="voucher-actions"><span class="badge">${isRegistered ? "TERDAFTAR - jangan kirim ulang" : (isClaimed ? "CLAIMED" : "Not active")}</span></div>`;
 
       return `
         <div class="voucher-row ${cls}">
@@ -407,6 +416,112 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
 
   await loadVouchers();
 }
+async function renderMembers(){
+  const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("members");
+  screen(`
+    <section class="card">
+      <h1>Member Directory</h1>
+      <p>Semua member yang pernah daftar. Bisa export TXT atau buka versi print untuk Save as PDF.</p>
+      <div class="voucher-toolbar">
+        <input id="member-query" placeholder="Search nama / nomor HP..." autocomplete="off" />
+        <button class="secondary" id="export-txt" type="button">Export TXT</button>
+        <button class="ghost" id="export-pdf" type="button">Export PDF / Print</button>
+        <button class="ghost" id="refresh-members" type="button">Refresh</button>
+      </div>
+      <div id="member-summary" class="success">Loading member...</div>
+      <div id="member-list" class="list" style="margin-top:12px"></div>
+    </section>
+  `);
+
+  let members = [];
+
+  function renderMemberRows(){
+    const q = byId("member-query").value.trim().toLowerCase();
+    const rows = members.filter(m =>
+      !q || String(m.name||"").toLowerCase().includes(q) || String(m.phone||"").includes(q)
+    );
+    byId("member-summary").innerHTML = `<b>${rows.length}</b> member ditampilkan dari total <b>${members.length}</b> member.`;
+    if(!rows.length){
+      byId("member-list").innerHTML = `<div class="notice">Tidak ada member.</div>`;
+      return;
+    }
+    byId("member-list").innerHTML = rows.map(m => `
+      <div class="member-row">
+        <div><div class="name">${m.name || "-"}</div><div class="meta">${m.member_code || "-"}</div></div>
+        <div class="phone">${m.phone || "-"}</div>
+        <div class="money">${money(m.balance || 0)}</div>
+        <div><span class="status-pill available">${(m.status || "active").toUpperCase()}</span></div>
+      </div>
+    `).join("");
+  }
+
+  function memberText(rows){
+    const lines = [];
+    lines.push("CASH TO DINE - MEMBER LIST");
+    lines.push(`Export: ${new Date().toLocaleString("id-ID")}`);
+    lines.push(`Total: ${rows.length} member`);
+    lines.push("");
+    rows.forEach((m,i)=>{
+      lines.push(`${i+1}. ${m.name || "-"} | ${m.phone || "-"} | ${m.member_code || "-"} | Saldo: ${money(m.balance || 0)}`);
+    });
+    return lines.join("\n");
+  }
+
+  function visibleRows(){
+    const q = byId("member-query").value.trim().toLowerCase();
+    return members.filter(m =>
+      !q || String(m.name||"").toLowerCase().includes(q) || String(m.phone||"").includes(q)
+    );
+  }
+
+  async function loadMembers(){
+    byId("member-list").innerHTML = `<div class="notice">Loading member...</div>`;
+    try{
+      members = await rpc("mvp_list_members", {p_staff_id:u.id});
+      members = members || [];
+      renderMemberRows();
+    }catch(err){
+      byId("member-list").innerHTML = `<div class="error">${err.message}</div>`;
+    }
+  }
+
+  byId("member-query").addEventListener("input", renderMemberRows);
+  byId("refresh-members").onclick = loadMembers;
+  byId("export-txt").onclick = ()=>{
+    const text = memberText(visibleRows());
+    const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cash-to-dine-members-${new Date().toISOString().slice(0,10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+  byId("export-pdf").onclick = ()=>{
+    const rows = visibleRows();
+    const html = `
+      <!doctype html><html><head><title>Cash to Dine Member List</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:24px;color:#111827}
+        h1{margin-bottom:4px}
+        table{border-collapse:collapse;width:100%;margin-top:18px}
+        th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}
+        th{background:#f3f4f6}
+      </style></head><body>
+      <h1>Cash to Dine - Member List</h1>
+      <div>Export: ${new Date().toLocaleString("id-ID")}</div>
+      <div>Total: ${rows.length} member</div>
+      <table><thead><tr><th>No</th><th>Nama</th><th>No Telpon</th><th>Member ID</th><th>Saldo</th><th>Status</th></tr></thead>
+      <tbody>${rows.map((m,i)=>`<tr><td>${i+1}</td><td>${m.name||"-"}</td><td>${m.phone||"-"}</td><td>${m.member_code||"-"}</td><td>${money(m.balance||0)}</td><td>${m.status||"active"}</td></tr>`).join("")}</tbody></table>
+      <script>window.onload=()=>window.print();</script></body></html>`;
+    const w = window.open("", "_blank");
+    w.document.write(html);
+    w.document.close();
+  };
+
+  await loadMembers();
+}
+
 async function renderReport(){
   const u=requireLogin(); if(!u)return; mountLayout(); setNav("report"); screen(`<section class="card"><h1>Loading report...</h1></section>`); try{ const rows=await rpc("mvp_recent_transactions",{p_staff_id:u.id}); screen(`<section class="card"><h1>Transaction Report</h1><div class="list">${rows&&rows.length?rows.map(t=>`<div class="item"><div class="title">${t.type} • ${money(t.balance_used||t.credit_issued||0)}</div><div class="meta">${t.member_name||"-"} • ${t.member_phone||"-"} • ${new Date(t.created_at).toLocaleString("id-ID")}</div><div class="meta">Status: ${t.status}</div></div>`).join(""):`<p>Belum ada transaksi.</p>`}</div></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
 }

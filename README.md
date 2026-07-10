@@ -135,3 +135,22 @@ RLS must remain enabled. Do not expose service_role key.
   - `mvp_generate_gift_codes_batch`
   - `mvp_list_gift_codes_paged`
   - `mvp_delete_gift_code`
+
+
+## Update v1.1 Voucher Lifecycle + Member Directory
+Voucher lifecycle:
+- Available: can copy/send to customer.
+- Terdaftar / Registered: used for member registration; copy buttons hidden to prevent sending to another person.
+- Claimed: member has used saldo in a transaction.
+- Void: deleted before registration.
+
+Member Directory:
+- Owner can see all registered members.
+- Includes Nama, No Telpon, Member ID, Saldo, Status.
+- Export TXT.
+- Export PDF via browser Print / Save as PDF.
+- Required SQL RPC:
+  - `mvp_list_members(uuid)`
+  - updated `mvp_claim_gift_code`
+  - updated `mvp_approve_balance_use`
+  - updated voucher list/generate/delete functions

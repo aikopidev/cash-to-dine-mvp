@@ -282,3 +282,34 @@ button:disabled{
   background:#f3f4f6;
   color:#9ca3af;
 }
+
+.member-row{
+  display:grid;
+  grid-template-columns: 1fr 1fr .8fr .8fr;
+  gap:10px;
+  align-items:center;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:12px;
+  background:#fff;
+}
+.member-row .name{font-weight:900;}
+.member-row .phone{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,monospace;}
+.status-pill.registered{
+  background:#dbeafe;
+  color:#1e40af;
+}
+.status-pill.claimed{
+  background:#ede9fe;
+  color:#5b21b6;
+}
+.voucher-row.registered{
+  background:#eff6ff;
+}
+.voucher-row.claimed{
+  background:#f5f3ff;
+  color:#5b21b6;
+}
+@media(max-width:720px){
+  .member-row{grid-template-columns:1fr;}
+}
