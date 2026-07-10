@@ -189,3 +189,14 @@ Member Directory:
   - Custom
 - Top up writes to Supabase via `mvp_topup_member`.
 - Saldo member updates immediately in cloud.
+
+
+## Update v1.4 Top Up Packages + POS Invoice
+- Top Up packages changed:
+  - DIAMOND: bayar Rp5.000.000 → saldo Rp10.000.000
+  - GOLD: bayar Rp2.000.000 → saldo Rp3.500.000
+  - SILVER: bayar Rp500.000 → saldo Rp700.000
+  - CUSTOM: full manual
+- Payment Method field removed.
+- Kasir must input POS Invoice Number.
+- Top up RPC now uses `p_invoice_number`.

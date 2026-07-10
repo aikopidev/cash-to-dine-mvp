@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "1.3.0";
+const APP_VERSION = "1.4.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -181,17 +181,17 @@ async function renderTopup(){
       <section class="card">
         <h2>Pilih Paket / Custom</h2>
         <div class="grid two" id="package-grid">
-          <button type="button" class="topup-package active" data-paid="1000000" data-credit="1500000">
-            <b>Bayar Rp1.000.000</b><br><span class="meta">Dapat saldo Rp1.500.000</span>
+          <button type="button" class="topup-package active" data-paid="5000000" data-credit="10000000">
+            <b>DIAMOND</b><br><span class="meta">Bayar Rp5.000.000 → Saldo Rp10.000.000</span>
+          </button>
+          <button type="button" class="topup-package" data-paid="2000000" data-credit="3500000">
+            <b>GOLD</b><br><span class="meta">Bayar Rp2.000.000 → Saldo Rp3.500.000</span>
           </button>
           <button type="button" class="topup-package" data-paid="500000" data-credit="700000">
-            <b>Bayar Rp500.000</b><br><span class="meta">Dapat saldo Rp700.000</span>
-          </button>
-          <button type="button" class="topup-package" data-paid="250000" data-credit="300000">
-            <b>Bayar Rp250.000</b><br><span class="meta">Dapat saldo Rp300.000</span>
+            <b>SILVER</b><br><span class="meta">Bayar Rp500.000 → Saldo Rp700.000</span>
           </button>
           <button type="button" class="topup-package" data-paid="custom" data-credit="custom">
-            <b>Custom</b><br><span class="meta">Input manual</span>
+            <b>CUSTOM</b><br><span class="meta">Input manual bayar dan saldo</span>
           </button>
         </div>
 
@@ -199,15 +199,15 @@ async function renderTopup(){
           <div class="grid two">
             <div>
               <label>Uang Diterima Kasir</label>
-              <input id="cashPaid" inputmode="numeric" value="1000000" />
+              <input id="cashPaid" inputmode="numeric" value="5000000" />
             </div>
             <div>
               <label>Saldo yang Diberikan</label>
-              <input id="creditIssued" inputmode="numeric" value="1500000" />
+              <input id="creditIssued" inputmode="numeric" value="10000000" />
             </div>
           </div>
-          <label>Payment Method</label>
-          <select id="paymentMethod"><option>QRIS</option><option>Cash</option><option>Transfer</option><option>Card</option></select>
+          <label>Invoice Number dari POS</label>
+          <input id="invoiceNumber" placeholder="Contoh: INV-2026-000123" required />
           <div id="topup-preview" class="success" style="margin-top:12px"></div>
           <button class="full" style="margin-top:14px">Submit Top Up</button>
         </form>
@@ -217,7 +217,7 @@ async function renderTopup(){
 
     function refreshPreview(){
       const paid=parseMoney(byId("cashPaid").value), credit=parseMoney(byId("creditIssued").value);
-      byId("topup-preview").innerHTML=`Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>. Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.`;
+      byId("topup-preview").innerHTML=`Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>. Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.<br>Pastikan invoice POS sudah diinput sebelum submit.`;
     }
 
     document.querySelectorAll(".topup-package").forEach(btn=>{
@@ -245,14 +245,19 @@ async function renderTopup(){
       }
       box.innerHTML=`<div class="notice">Submitting top up...</div>`;
       try{
+        const invoiceNumber = byId("invoiceNumber").value.trim();
+        if(!invoiceNumber){
+          box.innerHTML=`<div class="error">Invoice Number dari POS wajib diisi.</div>`;
+          return;
+        }
         const newBalance=await rpc("mvp_topup_member",{
           p_staff_id:user.id,
           p_member_id:member.member_id,
           p_cash_paid:paid,
           p_credit_issued:credit,
-          p_payment_method:byId("paymentMethod").value
+          p_invoice_number:invoiceNumber
         });
-        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Saldo baru member: <b>${money(newBalance)}</b>.</div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${member.phone}'})">Lihat Member</button></div>`;
+        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Invoice POS: <b>${invoiceNumber}</b><br>Saldo baru member: <b>${money(newBalance)}</b>.</div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${member.phone}'})">Lihat Member</button></div>`;
       }catch(err){
         box.innerHTML=`<div class="error">${err.message}</div>`;
       }
