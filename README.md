@@ -102,3 +102,10 @@ RLS must remain enabled. Do not expose service_role key.
 - Invite/approval links now include `?v=0.7.0` before hash to bypass stale cache.
 - Public join page shows "Online Cloud Database • Supabase v0.7" marker.
 - Generate new gift codes only after app header shows Supabase v0.7.
+
+
+## Update v0.8 Search & Approval UX
+- Kasir search member now supports live suggestions after 7 digits.
+- New Supabase RPC required: `mvp_search_members(uuid, text)`.
+- Customer approval screen now removes PIN/buttons after successful approval.
+- Customer success screen shows saldo used and remaining saldo clearly.
