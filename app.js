@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "1.4.0";
+const APP_VERSION = "1.5.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -180,18 +180,38 @@ async function renderTopup(){
 
       <section class="card">
         <h2>Pilih Paket / Custom</h2>
-        <div class="grid two" id="package-grid">
-          <button type="button" class="topup-package active" data-paid="5000000" data-credit="10000000">
-            <b>DIAMOND</b><br><span class="meta">Bayar Rp5.000.000 → Saldo Rp10.000.000</span>
+        <div class="package-grid" id="package-grid">
+          <button type="button" class="topup-package package-diamond active" data-package="DIAMOND" data-paid="5000000" data-credit="10000000">
+            <div class="package-top"><div class="package-icon">💎</div><div class="package-badge">BEST VALUE</div></div>
+            <div class="package-title">DIAMOND</div>
+            <div class="package-pay">Bayar Rp5.000.000</div>
+            <div class="package-credit">Dapat saldo Rp10.000.000</div>
+            <div class="package-note">Premium dining credit untuk customer loyal.</div>
+            <div class="package-selected">SELECTED</div>
           </button>
-          <button type="button" class="topup-package" data-paid="2000000" data-credit="3500000">
-            <b>GOLD</b><br><span class="meta">Bayar Rp2.000.000 → Saldo Rp3.500.000</span>
+          <button type="button" class="topup-package package-gold" data-package="GOLD" data-paid="2000000" data-credit="3500000">
+            <div class="package-top"><div class="package-icon">🏆</div><div class="package-badge">POPULAR</div></div>
+            <div class="package-title">GOLD</div>
+            <div class="package-pay">Bayar Rp2.000.000</div>
+            <div class="package-credit">Dapat saldo Rp3.500.000</div>
+            <div class="package-note">Paket favorit untuk regular customer.</div>
+            <div class="package-selected">SELECTED</div>
           </button>
-          <button type="button" class="topup-package" data-paid="500000" data-credit="700000">
-            <b>SILVER</b><br><span class="meta">Bayar Rp500.000 → Saldo Rp700.000</span>
+          <button type="button" class="topup-package package-silver" data-package="SILVER" data-paid="500000" data-credit="700000">
+            <div class="package-top"><div class="package-icon">🥈</div><div class="package-badge">STARTER</div></div>
+            <div class="package-title">SILVER</div>
+            <div class="package-pay">Bayar Rp500.000</div>
+            <div class="package-credit">Dapat saldo Rp700.000</div>
+            <div class="package-note">Entry package untuk member baru.</div>
+            <div class="package-selected">SELECTED</div>
           </button>
-          <button type="button" class="topup-package" data-paid="custom" data-credit="custom">
-            <b>CUSTOM</b><br><span class="meta">Input manual bayar dan saldo</span>
+          <button type="button" class="topup-package package-custom" data-package="CUSTOM" data-paid="custom" data-credit="custom">
+            <div class="package-top"><div class="package-icon">✍️</div><div class="package-badge">MANUAL</div></div>
+            <div class="package-title">CUSTOM</div>
+            <div class="package-pay">Input manual</div>
+            <div class="package-credit">Nominal bebas</div>
+            <div class="package-note">Untuk kondisi khusus sesuai approval owner.</div>
+            <div class="package-selected">SELECTED</div>
           </button>
         </div>
 
@@ -215,18 +235,23 @@ async function renderTopup(){
       </section>
     `);
 
+    let selectedPackage = "DIAMOND";
+
     function refreshPreview(){
       const paid=parseMoney(byId("cashPaid").value), credit=parseMoney(byId("creditIssued").value);
-      byId("topup-preview").innerHTML=`Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>. Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.<br>Pastikan invoice POS sudah diinput sebelum submit.`;
+      byId("topup-preview").innerHTML=`Paket: <b>${selectedPackage}</b><br>Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>. Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.<br>Pastikan invoice POS sudah diinput sebelum submit.`;
     }
 
     document.querySelectorAll(".topup-package").forEach(btn=>{
       btn.onclick=()=>{
         document.querySelectorAll(".topup-package").forEach(b=>b.classList.remove("active"));
         btn.classList.add("active");
+        selectedPackage = btn.dataset.package || "CUSTOM";
         if(btn.dataset.paid!=="custom"){
           byId("cashPaid").value=btn.dataset.paid;
           byId("creditIssued").value=btn.dataset.credit;
+        }else{
+          byId("cashPaid").focus();
         }
         refreshPreview();
       };
@@ -255,9 +280,10 @@ async function renderTopup(){
           p_member_id:member.member_id,
           p_cash_paid:paid,
           p_credit_issued:credit,
-          p_invoice_number:invoiceNumber
+          p_invoice_number:invoiceNumber,
+          p_package_name:selectedPackage
         });
-        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Invoice POS: <b>${invoiceNumber}</b><br>Saldo baru member: <b>${money(newBalance)}</b>.</div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${member.phone}'})">Lihat Member</button></div>`;
+        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Paket: <b>${selectedPackage}</b><br>Invoice POS: <b>${invoiceNumber}</b><br>Saldo baru member: <b>${money(newBalance)}</b>.</div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${member.phone}'})">Lihat Member</button></div>`;
       }catch(err){
         box.innerHTML=`<div class="error">${err.message}</div>`;
       }

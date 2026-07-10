@@ -200,3 +200,15 @@ Member Directory:
 - Payment Method field removed.
 - Kasir must input POS Invoice Number.
 - Top up RPC now uses `p_invoice_number`.
+
+
+## Update v1.5 Premium Top Up Cards
+- Fixed blank top up package cards.
+- Top up packages now have clear premium visual cards:
+  - DIAMOND 💎 blue/purple premium
+  - GOLD 🏆 gold
+  - SILVER 🥈 silver
+  - CUSTOM ✍️ manual neutral
+- Active selected package is clearly highlighted.
+- Top up transaction metadata now stores `package_name`.
+- RPC now accepts `p_package_name`.
