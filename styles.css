@@ -182,3 +182,71 @@ button:disabled{
   font-size:32px;
   font-weight:900;
 }
+
+.voucher-toolbar{
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  align-items:center;
+  margin:12px 0;
+}
+.voucher-toolbar select{
+  max-width:220px;
+}
+.voucher-row{
+  display:grid;
+  grid-template-columns: 1.1fr 1fr .8fr .9fr;
+  gap:10px;
+  align-items:center;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:12px;
+  background:#fff;
+}
+.voucher-row.used{
+  background:#f3f4f6;
+  color:#6b7280;
+}
+.voucher-row.used .code-box{
+  color:#6b7280;
+}
+.voucher-row.expired{
+  background:#fffbeb;
+}
+.voucher-row .campaign{
+  font-weight:800;
+}
+.status-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  padding:6px 10px;
+  font-size:12px;
+  font-weight:900;
+}
+.status-pill.available{
+  background:#d1fae5;
+  color:#065f46;
+}
+.status-pill.used{
+  background:#e5e7eb;
+  color:#4b5563;
+}
+.status-pill.expired{
+  background:#fef3c7;
+  color:#92400e;
+}
+.voucher-summary{
+  display:grid;
+  grid-template-columns: repeat(4, minmax(0,1fr));
+  gap:10px;
+}
+@media(max-width:720px){
+  .voucher-row{
+    grid-template-columns:1fr;
+  }
+  .voucher-summary{
+    grid-template-columns:1fr 1fr;
+  }
+}

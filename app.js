@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "0.8.1";
+const APP_VERSION = "0.9.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -189,10 +189,187 @@ async function renderSuccess(){
 async function renderOwner(){ const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("owner"); screen(`<section class="card"><h1>Owner Dashboard</h1><p>${OUTLET} • Supabase connected.</p><div class="grid two"><button onclick="setHash('gift-generate')">Generate Gift Code</button><button class="secondary" onclick="setHash('report')">Transaction Report</button></div></section><section class="card"><h3>Database Status</h3><div class="success">Connected to Supabase: ${SUPABASE_URL}</div><p>Untuk dashboard metric lengkap, next iteration perlu RPC summary report.</p></section>`); }
 
 async function renderGiftGenerate(){
-  const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("gift"); screen(`<section class="card"><h1>Generate Gift Code</h1><p>Kode random 8 digit. Kode = uang saldo, hanya 1x pakai saat daftar member baru.</p><form id="gift-form"><label>Campaign / Event Name</label><input id="campaign" value="Soft Opening Cacayo" required/><div class="grid two"><div><label>Jumlah Kode</label><input id="qty" inputmode="numeric" value="5" required/></div><div><label>Value per Code</label><input id="value" inputmode="numeric" value="100000" required/></div></div><label>Expired Date</label><input id="expired" type="date" value="2026-08-31" required/><button class="full" style="margin-top:14px">Generate Codes</button></form><div id="gift-result" style="margin-top:12px"></div></section>`);
-  byId("gift-form").onsubmit=async(e)=>{ e.preventDefault(); const qty=Math.min(parseMoney(byId("qty").value),100), value=parseMoney(byId("value").value), camp=byId("campaign").value.trim(), exp=byId("expired").value, box=byId("gift-result"); box.innerHTML=`<div class="notice">Generating ${qty} gift codes...</div>`; const created=[]; try{ for(let i=0;i<qty;i++){ const code=randomCode(8); await rpc("mvp_generate_gift_code",{p_staff_id:u.id,p_campaign_name:camp,p_code:code,p_value:value,p_expired_at:exp}); created.push(code); } const joinBase=`${publicBaseUrl()}#join?code=`; const wa=created.map(code=>`Halo Kak, kamu dapat Gift Dining Credit ${money(value)} dari ${OUTLET}.\n\nDaftar member di link ini:\n${joinBase}${code}\n\nGift Code: ${code}\n\nKode ini hanya bisa digunakan 1x saat daftar member baru.`).join("\n\n-------------------------\n\n"); const links=created.map(code=>`${joinBase}${code}`).join("\n"), csv=created.join("\n"); box.innerHTML=`<div class="success"><b>${qty} Gift Codes Generated ✅</b><br>Total Liability: ${money(qty*value)}<br>Data sudah masuk Supabase.</div><label>WA-ready Invite Messages</label><textarea class="copy-area" id="waArea" readonly>${wa}</textarea><button class="secondary full" onclick="navigator.clipboard.writeText(document.getElementById('waArea').value).then(()=>alert('WA messages copied'))">Copy WA Invite Messages</button><label>Registration Links per Code</label><textarea class="copy-area" id="linksArea" readonly>${links}</textarea><button class="secondary full" onclick="navigator.clipboard.writeText(document.getElementById('linksArea').value).then(()=>alert('Links copied'))">Copy Registration Links</button><label>Codes Only</label><textarea class="copy-area" id="codesArea" readonly>${csv}</textarea><button class="ghost full" onclick="navigator.clipboard.writeText(document.getElementById('codesArea').value).then(()=>alert('Codes copied'))">Copy Codes Only</button>`; }catch(err){ box.innerHTML=`<div class="error">${err.message}</div>`; } };
-}
+  const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("gift");
+  screen(`
+    <section class="card">
+      <h1>Voucher Control Center</h1>
+      <p>Monitor semua gift code lama dan baru. Voucher yang sudah dipakai otomatis abu-abu, voucher yang masih available bisa dicopy ulang untuk WA.</p>
+      <div id="voucher-summary" class="voucher-summary">
+        <div class="stat"><div class="label">Total</div><div class="value">-</div></div>
+        <div class="stat"><div class="label">Available</div><div class="value">-</div></div>
+        <div class="stat"><div class="label">Used</div><div class="value">-</div></div>
+        <div class="stat"><div class="label">Available Value</div><div class="value">-</div></div>
+      </div>
+      <div class="voucher-toolbar">
+        <select id="voucher-filter">
+          <option value="available">Available dulu</option>
+          <option value="all">All status</option>
+          <option value="used">Used</option>
+          <option value="expired">Expired</option>
+        </select>
+        <button class="secondary" id="copy-available-wa" type="button">Copy WA Available</button>
+        <button class="ghost" id="copy-available-links" type="button">Copy Links Available</button>
+        <button class="ghost" id="refresh-vouchers" type="button">Refresh</button>
+      </div>
+      <div id="voucher-list" class="list"><div class="notice">Loading voucher list...</div></div>
+    </section>
 
+    <section class="card">
+      <h2>Generate Gift Code Baru</h2>
+      <p>Generate hanya kalau stok voucher available sudah kurang. Jangan generate terus kalau masih banyak voucher lama belum dishare.</p>
+      <form id="gift-form">
+        <label>Campaign / Event Name</label>
+        <input id="campaign" value="Soft Opening Cacayo" required/>
+        <div class="grid two">
+          <div>
+            <label>Jumlah Kode</label>
+            <input id="qty" inputmode="numeric" value="5" required/>
+          </div>
+          <div>
+            <label>Value per Code</label>
+            <input id="value" inputmode="numeric" value="100000" required/>
+          </div>
+        </div>
+        <label>Expired Date</label>
+        <input id="expired" type="date" value="2026-08-31" required/>
+        <button class="full" style="margin-top:14px">Generate Codes</button>
+      </form>
+      <div id="gift-result" style="margin-top:12px"></div>
+    </section>
+  `);
+
+  let vouchers = [];
+  const joinBase = `${publicBaseUrl()}#join?code=`;
+
+  function voucherStatusClass(s){
+    return s === "used" ? "used" : (s === "expired" ? "expired" : "available");
+  }
+
+  function waMessageFor(code, value){
+    return `Halo Kak, kamu dapat Gift Dining Credit ${money(value)} dari ${OUTLET}.
+
+Daftar member di link ini:
+${joinBase}${code}
+
+Gift Code: ${code}
+
+Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
+  }
+
+  function renderVoucherRows(){
+    const filter = byId("voucher-filter").value;
+    let rows = [...vouchers];
+
+    if(filter === "available"){
+      rows = rows.filter(v => v.voucher_status === "available");
+    } else if(filter !== "all"){
+      rows = rows.filter(v => v.voucher_status === filter);
+    }
+
+    rows.sort((a,b)=>{
+      const priority = {available:0, used:1, expired:2};
+      return (priority[a.voucher_status] ?? 9) - (priority[b.voucher_status] ?? 9)
+        || new Date(b.created_at) - new Date(a.created_at);
+    });
+
+    if(!rows.length){
+      byId("voucher-list").innerHTML = `<div class="notice">Tidak ada voucher untuk filter ini.</div>`;
+      return;
+    }
+
+    byId("voucher-list").innerHTML = rows.map(v => {
+      const cls = voucherStatusClass(v.voucher_status);
+      const usedInfo = v.voucher_status === "used"
+        ? `<div class="meta">Used by: ${v.used_by_name || "-"} • ${v.used_by_phone || "-"}</div>`
+        : `<div class="meta">Link: ${joinBase}${v.code}</div>`;
+      return `
+        <div class="voucher-row ${cls}">
+          <div>
+            <div class="code-box">${v.code}</div>
+            <div class="meta">Exp: ${v.expired_at || "-"}</div>
+          </div>
+          <div>
+            <div class="campaign">${v.campaign_name || "-"}</div>
+            ${usedInfo}
+          </div>
+          <div class="money">${money(v.value)}</div>
+          <div><span class="status-pill ${cls}">${v.voucher_status.toUpperCase()}</span></div>
+        </div>
+      `;
+    }).join("");
+  }
+
+  function renderSummary(){
+    const total = vouchers.length;
+    const available = vouchers.filter(v=>v.voucher_status==="available").length;
+    const used = vouchers.filter(v=>v.voucher_status==="used").length;
+    const availableValue = vouchers.filter(v=>v.voucher_status==="available").reduce((a,v)=>a+Number(v.value||0),0);
+    byId("voucher-summary").innerHTML = `
+      <div class="stat"><div class="label">Total</div><div class="value">${total}</div></div>
+      <div class="stat"><div class="label">Available</div><div class="value">${available}</div></div>
+      <div class="stat"><div class="label">Used</div><div class="value">${used}</div></div>
+      <div class="stat"><div class="label">Available Value</div><div class="value">${money(availableValue)}</div></div>
+    `;
+  }
+
+  async function loadVouchers(){
+    byId("voucher-list").innerHTML = `<div class="notice">Loading voucher list...</div>`;
+    try{
+      vouchers = await rpc("mvp_list_gift_codes", {p_staff_id:u.id});
+      vouchers = vouchers || [];
+      renderSummary();
+      renderVoucherRows();
+    }catch(err){
+      byId("voucher-list").innerHTML = `<div class="error">${err.message}</div>`;
+    }
+  }
+
+  byId("voucher-filter").onchange = renderVoucherRows;
+  byId("refresh-vouchers").onclick = loadVouchers;
+
+  byId("copy-available-wa").onclick = async ()=>{
+    const rows = vouchers.filter(v=>v.voucher_status==="available");
+    if(!rows.length){ alert("Tidak ada voucher available."); return; }
+    const text = rows.map(v=>waMessageFor(v.code, v.value)).join("\n\n-------------------------\n\n");
+    await navigator.clipboard.writeText(text);
+    alert(`${rows.length} WA invite available copied.`);
+  };
+
+  byId("copy-available-links").onclick = async ()=>{
+    const rows = vouchers.filter(v=>v.voucher_status==="available");
+    if(!rows.length){ alert("Tidak ada voucher available."); return; }
+    const text = rows.map(v=>`${joinBase}${v.code}`).join("\n");
+    await navigator.clipboard.writeText(text);
+    alert(`${rows.length} available links copied.`);
+  };
+
+  byId("gift-form").onsubmit=async(e)=>{
+    e.preventDefault();
+    const qty=Math.min(parseMoney(byId("qty").value),100),
+      value=parseMoney(byId("value").value),
+      camp=byId("campaign").value.trim(),
+      exp=byId("expired").value,
+      box=byId("gift-result");
+    box.innerHTML=`<div class="notice">Generating ${qty} gift codes...</div>`;
+    const created=[];
+    try{
+      for(let i=0;i<qty;i++){
+        const code=randomCode(8);
+        await rpc("mvp_generate_gift_code",{p_staff_id:u.id,p_campaign_name:camp,p_code:code,p_value:value,p_expired_at:exp});
+        created.push(code);
+      }
+      const wa=created.map(code=>waMessageFor(code,value)).join("\n\n-------------------------\n\n");
+      const links=created.map(code=>`${joinBase}${code}`).join("\n");
+      const csv=created.join("\n");
+      box.innerHTML=`<div class="success"><b>${qty} Gift Codes Generated ✅</b><br>Total Liability: ${money(qty*value)}<br>Data sudah masuk Supabase.</div><label>WA-ready Invite Messages Baru</label><textarea class="copy-area" id="waArea" readonly>${wa}</textarea><button class="secondary full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('waArea').value).then(()=>alert('WA messages copied'))">Copy WA Invite Baru</button><label>Registration Links Baru</label><textarea class="copy-area" id="linksArea" readonly>${links}</textarea><button class="secondary full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('linksArea').value).then(()=>alert('Links copied'))">Copy Links Baru</button><label>Codes Only Baru</label><textarea class="copy-area" id="codesArea" readonly>${csv}</textarea><button class="ghost full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('codesArea').value).then(()=>alert('Codes copied'))">Copy Codes Only</button>`;
+      await loadVouchers();
+    }catch(err){
+      box.innerHTML=`<div class="error">${err.message}</div>`;
+    }
+  };
+
+  await loadVouchers();
+}
 async function renderReport(){
   const u=requireLogin(); if(!u)return; mountLayout(); setNav("report"); screen(`<section class="card"><h1>Loading report...</h1></section>`); try{ const rows=await rpc("mvp_recent_transactions",{p_staff_id:u.id}); screen(`<section class="card"><h1>Transaction Report</h1><div class="list">${rows&&rows.length?rows.map(t=>`<div class="item"><div class="title">${t.type} • ${money(t.balance_used||t.credit_issued||0)}</div><div class="meta">${t.member_name||"-"} • ${t.member_phone||"-"} • ${new Date(t.created_at).toLocaleString("id-ID")}</div><div class="meta">Status: ${t.status}</div></div>`).join(""):`<p>Belum ada transaksi.</p>`}</div></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
 }

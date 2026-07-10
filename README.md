@@ -110,3 +110,13 @@ RLS must remain enabled. Do not expose service_role key.
 - Kasir search member supports live suggestions after 7 digits.
 - Requires SQL RPC `mvp_search_members(uuid, text)`.
 - Customer approval screen removes PIN/buttons after successful approval and shows saldo tersisa.
+
+
+## Update v0.9 Voucher Monitor
+- Gift Code page is now Voucher Control Center.
+- Owner can see previously generated vouchers.
+- Available vouchers stay green/active.
+- Used vouchers appear grey.
+- Expired vouchers appear yellow.
+- Owner can copy WA messages or registration links for all available vouchers.
+- Requires SQL RPC `mvp_list_gift_codes(uuid)`.
