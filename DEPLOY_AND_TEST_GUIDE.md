@@ -117,8 +117,9 @@ RLS must remain enabled. Do not expose service_role key.
 - Generate new gift codes only after app header shows Supabase v0.7.
 
 
-## Update v0.8 Search & Approval UX
-- Kasir search member now supports live suggestions after 7 digits.
-- New Supabase RPC required: `mvp_search_members(uuid, text)`.
-- Customer approval screen now removes PIN/buttons after successful approval.
-- Customer success screen shows saldo used and remaining saldo clearly.
+## Update v0.8.1 Search & Approval UX
+- Fixed packaging issue from v0.8.
+- Header must show `Cacayo • Supabase v0.8.1`.
+- Kasir search member supports live suggestions after 7 digits.
+- Requires SQL RPC `mvp_search_members(uuid, text)`.
+- Customer approval screen removes PIN/buttons after successful approval and shows saldo tersisa.

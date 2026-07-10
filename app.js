@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "0.7.0";
+const APP_VERSION = "0.8.1";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -56,9 +56,83 @@ function renderLogin(){
 }
 
 async function renderKasir(){
-  const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir");
-  screen(`<section class="card"><h1>Kasir Home</h1><p>Mulai dari nomor HP customer format 62xxxxxxxxxx.</p><form id="search-form"><label>Cari Member by Nomor HP</label><input id="phone" inputmode="numeric" placeholder="628553007700"/><button class="full" style="margin-top:12px">Cari Member</button></form></section><section class="card"><h3>Quick Action</h3><div class="grid two"><button onclick="setHash('join')">Daftar Member Baru</button><button class="secondary" onclick="setHash('report')">Transaksi Report</button></div></section>`);
-  byId("search-form").onsubmit = (e)=>{ e.preventDefault(); setHash("member", {phone: normalizePhone(byId("phone").value)}); };
+  const user=requireLogin(); if(!user) return; mountLayout(); setNav("kasir");
+  screen(`
+    <section class="card">
+      <h1>Kasir Home</h1>
+      <p>Ketik nomor HP customer. Setelah minimal 7 digit, hasil yang match akan langsung muncul.</p>
+      <form id="search-form">
+        <label>Cari Member by Nomor HP</label>
+        <input id="phone" inputmode="numeric" placeholder="Contoh: 6285530..." autocomplete="off"/>
+        <div class="search-hint">Minimal 7 digit. Bisa ketik 08 atau 62, sistem akan normalisasi ke 62.</div>
+        <div id="live-search-result" class="list" style="margin-top:12px"></div>
+        <button class="full" style="margin-top:12px">Cari Exact / Lanjut</button>
+      </form>
+      <div id="search-result" style="margin-top:12px"></div>
+    </section>
+    <section class="card">
+      <h3>Quick Action</h3>
+      <div class="grid two">
+        <button onclick="setHash('join')">Daftar Member Baru</button>
+        <button class="secondary" onclick="setHash('report')">Transaksi Report</button>
+      </div>
+    </section>
+  `);
+
+  const phoneInput = byId("phone");
+  const liveBox = byId("live-search-result");
+  let searchTimer = null;
+  let lastQuery = "";
+
+  async function runLiveSearch(){
+    const normalized = normalizePhone(phoneInput.value);
+    if(normalized.length < 7){
+      liveBox.innerHTML = `<div class="notice">Ketik minimal 7 digit untuk menampilkan kandidat member.</div>`;
+      return;
+    }
+    if(normalized === lastQuery) return;
+    lastQuery = normalized;
+    liveBox.innerHTML = `<div class="notice">Mencari member...</div>`;
+    try{
+      const rows = await rpc("mvp_search_members", {p_staff_id:user.id, p_query:normalized});
+      if(!rows || !rows.length){
+        liveBox.innerHTML = `
+          <div class="notice">
+            Tidak ada member yang match <b>${normalized}</b>.<br>
+            <button class="ghost full" style="margin-top:8px" type="button" onclick="setHash('join',{phone:'${normalized}'})">Daftarkan Nomor Ini</button>
+          </div>`;
+        return;
+      }
+      liveBox.innerHTML = rows.map(m => `
+        <button type="button" class="search-suggestion" onclick="setHash('member',{phone:'${m.phone}'})">
+          <div>
+            <div class="title">${m.name}</div>
+            <div class="meta">${m.phone} • ${m.member_code} • ${m.status}</div>
+          </div>
+          <div class="balance">${money(m.balance)}</div>
+        </button>
+      `).join("");
+    }catch(err){
+      liveBox.innerHTML = `<div class="error">${err.message}</div>`;
+    }
+  }
+
+  phoneInput.addEventListener("input",()=>{
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(runLiveSearch, 350);
+  });
+
+  byId("search-form").onsubmit=(e)=>{
+    e.preventDefault();
+    const phone = normalizePhone(phoneInput.value);
+    if(!phone){
+      byId("search-result").innerHTML = `<div class="error">Masukkan nomor HP dulu.</div>`;
+      return;
+    }
+    setHash("member",{phone});
+  };
+
+  liveBox.innerHTML = `<div class="notice">Ketik nomor HP customer untuk mulai search.</div>`;
 }
 async function fetchMemberByPhone(phone){ const u=currentUser(); const rows=await rpc("mvp_search_member",{p_staff_id:u.id, p_phone:normalizePhone(phone)}); return rows&&rows.length?rows[0]:null; }
 async function renderMember(){
