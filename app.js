@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "0.6.0";
+const APP_VERSION = "0.7.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -126,3 +126,20 @@ async function renderReport(){
 function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
 window.addEventListener("hashchange", route);
 window.addEventListener("load", route);
+
+
+async function killOldCaches(){
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => r.unregister()));
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+    }
+  } catch(e) {
+    console.warn("Cache cleanup skipped", e);
+  }
+}
+killOldCaches();

@@ -93,3 +93,12 @@ Frontend actions now call Supabase RPC functions:
 
 Required base URL: https://xkxbmiwnufyfacviquza.supabase.co
 RLS must remain enabled. Do not expose service_role key.
+
+
+## Update v0.7 Cache Killer
+- Removed service worker registration from index.html.
+- Added Cloudflare `_headers` no-store rules.
+- Replaced service-worker.js with no-cache/unregister behavior.
+- Invite/approval links now include `?v=0.7.0` before hash to bypass stale cache.
+- Public join page shows "Online Cloud Database • Supabase v0.7" marker.
+- Generate new gift codes only after app header shows Supabase v0.7.

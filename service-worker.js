@@ -1,8 +1,22 @@
-const CACHE_NAME = "cash-to-dine-mvp-v1";
-const ASSETS = ["./","./index.html","./styles.css","./app.js","./manifest.json"];
+// Cash to Dine v0.7 cache killer.
+// This service worker intentionally does not cache anything.
+// Existing old service workers will be replaced, then this one unregisters itself.
 self.addEventListener("install", event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(ASSETS)));
+  self.skipWaiting();
 });
+
+self.addEventListener("activate", event => {
+  event.waitUntil((async () => {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map(k => caches.delete(k)));
+      await self.registration.unregister();
+      const clients = await self.clients.matchAll({ type: "window" });
+      for (const client of clients) client.navigate(client.url);
+    } catch (e) {}
+  })());
+});
+
 self.addEventListener("fetch", event => {
-  event.respondWith(caches.match(event.request).then(cached => cached || fetch(event.request)));
+  event.respondWith(fetch(event.request, { cache: "no-store" }));
 });
