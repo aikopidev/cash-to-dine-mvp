@@ -177,3 +177,15 @@ Member Directory:
 - Export TXT and PDF/Print remain available.
 - Required SQL RPC:
   - `mvp_owner_dashboard_summary(uuid)`
+
+
+## Update v1.3 Kasir Top Up Center
+- Top Up member lama is restored and made clearer in Kasir flow.
+- Kasir Home live search results now show direct buttons: Top Up and Gunakan.
+- Top Up screen includes package buttons:
+  - Bayar Rp1.000.000 → saldo Rp1.500.000
+  - Bayar Rp500.000 → saldo Rp700.000
+  - Bayar Rp250.000 → saldo Rp300.000
+  - Custom
+- Top up writes to Supabase via `mvp_topup_member`.
+- Saldo member updates immediately in cloud.

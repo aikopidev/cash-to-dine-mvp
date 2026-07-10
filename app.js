@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.3.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -70,6 +70,18 @@ async function renderKasir(){
       </form>
       <div id="search-result" style="margin-top:12px"></div>
     </section>
+
+    <section class="card">
+      <h2>Kasir Actions</h2>
+      <div class="grid two">
+        <button onclick="document.getElementById('phone').focus()">Top Up Member Lama</button>
+        <button class="secondary" onclick="document.getElementById('phone').focus()">Gunakan Saldo Member</button>
+      </div>
+      <div class="notice" style="margin-top:12px">
+        Untuk top up member lama: search nomor HP → pilih member → klik <b>Top Up Saldo</b>.
+      </div>
+    </section>
+
     <section class="card">
       <h3>Quick Action</h3>
       <div class="grid two">
@@ -104,13 +116,15 @@ async function renderKasir(){
         return;
       }
       liveBox.innerHTML = rows.map(m => `
-        <button type="button" class="search-suggestion" onclick="setHash('member',{phone:'${m.phone}'})">
+        <div class="member-action-row">
           <div>
             <div class="title">${m.name}</div>
             <div class="meta">${m.phone} • ${m.member_code} • ${m.status}</div>
+            <div class="balance">Saldo: ${money(m.balance)}</div>
           </div>
-          <div class="balance">${money(m.balance)}</div>
-        </button>
+          <button type="button" class="secondary" onclick="setHash('topup',{phone:'${m.phone}'})">Top Up</button>
+          <button type="button" onclick="setHash('use-balance',{phone:'${m.phone}'})">Gunakan</button>
+        </div>
       `).join("");
     }catch(err){
       liveBox.innerHTML = `<div class="error">${err.message}</div>`;
@@ -150,13 +164,103 @@ function renderJoin(){
 }
 
 async function renderTopup(){
-  const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); screen(`<section class="card"><h1>Loading top up...</h1></section>`);
-  try{ const m=await fetchMemberByPhone(params.phone); if(!m){setHash("kasir");return;} screen(`<section class="card"><h1>Top Up Saldo</h1><p>${m.name} • ${m.phone}</p><div class="kpi"><div class="label">Saldo Sekarang</div><div class="value">${money(m.balance)}</div></div><form id="topup-form"><label>Paket Top Up</label><select id="package"><option value="1000000|1500000">Bayar 1jt → Saldo 1.5jt</option><option value="500000|700000">Bayar 500rb → Saldo 700rb</option><option value="custom">Custom</option></select><div class="grid two"><div><label>Cash Paid</label><input id="cashPaid" inputmode="numeric" value="1000000"/></div><div><label>Dining Value</label><input id="creditIssued" inputmode="numeric" value="1500000"/></div></div><label>Payment Method</label><select id="paymentMethod"><option>QRIS</option><option>Cash</option><option>Transfer</option><option>Card</option></select><button class="full" style="margin-top:14px">Submit Top Up</button></form><div id="topup-result" style="margin-top:12px"></div></section>`);
-    byId("package").onchange=(e)=>{ if(e.target.value==="custom")return; const [paid,credit]=e.target.value.split("|"); byId("cashPaid").value=paid; byId("creditIssued").value=credit; };
-    byId("topup-form").onsubmit=async(e)=>{ e.preventDefault(); const box=byId("topup-result"); box.innerHTML=`<div class="notice">Submitting top up...</div>`; try{ const newBal=await rpc("mvp_topup_member",{p_staff_id:u.id,p_member_id:m.member_id,p_cash_paid:parseMoney(byId("cashPaid").value),p_credit_issued:parseMoney(byId("creditIssued").value),p_payment_method:byId("paymentMethod").value}); box.innerHTML=`<div class="success">Top up sukses. Saldo baru: ${money(newBal)}</div>`; setTimeout(()=>setHash("member",{phone:m.phone}),900); }catch(err){ box.innerHTML=`<div class="error">${err.message}</div>`; } };
-  }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
-}
+  const user=requireLogin(); if(!user)return; mountLayout(); setNav("kasir");
+  const {params}=getRoute(); const phone=normalizePhone(params.phone||"");
+  screen(`<section class="card"><h1>Loading top up...</h1></section>`);
+  try{
+    const member=await fetchMemberByPhone(phone);
+    if(!member){ setHash("kasir"); return; }
+    screen(`
+      <section class="card">
+        <h1>Top Up Saldo Member</h1>
+        <p>Kasir menerima pembayaran dari customer, lalu input saldo yang diberikan ke member.</p>
+        <div class="kpi"><div class="label">${member.name} • ${member.phone}</div><div class="value">${money(member.balance)}</div></div>
+        <div class="notice" style="margin-top:12px">Saldo sekarang: <b>${money(member.balance)}</b>. Setelah submit, saldo akan langsung bertambah di Supabase.</div>
+      </section>
 
+      <section class="card">
+        <h2>Pilih Paket / Custom</h2>
+        <div class="grid two" id="package-grid">
+          <button type="button" class="topup-package active" data-paid="1000000" data-credit="1500000">
+            <b>Bayar Rp1.000.000</b><br><span class="meta">Dapat saldo Rp1.500.000</span>
+          </button>
+          <button type="button" class="topup-package" data-paid="500000" data-credit="700000">
+            <b>Bayar Rp500.000</b><br><span class="meta">Dapat saldo Rp700.000</span>
+          </button>
+          <button type="button" class="topup-package" data-paid="250000" data-credit="300000">
+            <b>Bayar Rp250.000</b><br><span class="meta">Dapat saldo Rp300.000</span>
+          </button>
+          <button type="button" class="topup-package" data-paid="custom" data-credit="custom">
+            <b>Custom</b><br><span class="meta">Input manual</span>
+          </button>
+        </div>
+
+        <form id="topup-form" style="margin-top:14px">
+          <div class="grid two">
+            <div>
+              <label>Uang Diterima Kasir</label>
+              <input id="cashPaid" inputmode="numeric" value="1000000" />
+            </div>
+            <div>
+              <label>Saldo yang Diberikan</label>
+              <input id="creditIssued" inputmode="numeric" value="1500000" />
+            </div>
+          </div>
+          <label>Payment Method</label>
+          <select id="paymentMethod"><option>QRIS</option><option>Cash</option><option>Transfer</option><option>Card</option></select>
+          <div id="topup-preview" class="success" style="margin-top:12px"></div>
+          <button class="full" style="margin-top:14px">Submit Top Up</button>
+        </form>
+        <div id="topup-result" style="margin-top:12px"></div>
+      </section>
+    `);
+
+    function refreshPreview(){
+      const paid=parseMoney(byId("cashPaid").value), credit=parseMoney(byId("creditIssued").value);
+      byId("topup-preview").innerHTML=`Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>. Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.`;
+    }
+
+    document.querySelectorAll(".topup-package").forEach(btn=>{
+      btn.onclick=()=>{
+        document.querySelectorAll(".topup-package").forEach(b=>b.classList.remove("active"));
+        btn.classList.add("active");
+        if(btn.dataset.paid!=="custom"){
+          byId("cashPaid").value=btn.dataset.paid;
+          byId("creditIssued").value=btn.dataset.credit;
+        }
+        refreshPreview();
+      };
+    });
+    byId("cashPaid").oninput=refreshPreview;
+    byId("creditIssued").oninput=refreshPreview;
+    refreshPreview();
+
+    byId("topup-form").onsubmit=async(e)=>{
+      e.preventDefault();
+      const box=byId("topup-result");
+      const paid=parseMoney(byId("cashPaid").value), credit=parseMoney(byId("creditIssued").value);
+      if(paid < 0 || credit <= 0){
+        box.innerHTML=`<div class="error">Nominal tidak valid. Saldo yang diberikan harus lebih dari Rp0.</div>`;
+        return;
+      }
+      box.innerHTML=`<div class="notice">Submitting top up...</div>`;
+      try{
+        const newBalance=await rpc("mvp_topup_member",{
+          p_staff_id:user.id,
+          p_member_id:member.member_id,
+          p_cash_paid:paid,
+          p_credit_issued:credit,
+          p_payment_method:byId("paymentMethod").value
+        });
+        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Saldo baru member: <b>${money(newBalance)}</b>.</div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${member.phone}'})">Lihat Member</button></div>`;
+      }catch(err){
+        box.innerHTML=`<div class="error">${err.message}</div>`;
+      }
+    };
+  }catch(err){
+    screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`);
+  }
+}
 async function renderUseBalance(){
   const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); screen(`<section class="card"><h1>Loading saldo...</h1></section>`);
   try{ const m=await fetchMemberByPhone(params.phone); if(!m){setHash("kasir");return;} const bal=Number(m.balance||0); const dis=bal<=0?"disabled":""; screen(`<section class="card"><h1>Gunakan Saldo</h1><p>${m.name} • Saldo ${money(bal)}</p>${bal<=0?`<div class="error"><b>Saldo customer Rp0.</b><br>Request pemakaian saldo tidak bisa dibuat sampai customer top up / mendapat saldo baru.</div>`:`<div class="notice">Kasir cukup input nominal saldo/voucher yang akan dipakai. Bill dan payment split tetap divalidasi manual di POS.</div>`}<form id="use-form"><label>Nominal Saldo / Voucher yang Dipakai</label><input id="balanceUsed" inputmode="numeric" placeholder="100000" ${dis} required/><div id="calc" class="notice" style="margin-top:12px">Nominal akan dikirim ke customer untuk approval.</div><button id="requestBtn" class="full" style="margin-top:14px" ${dis}>Request Customer Approval</button></form><div id="use-result" style="margin-top:12px"></div></section>`);
