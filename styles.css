@@ -250,3 +250,35 @@ button:disabled{
     grid-template-columns:1fr 1fr;
   }
 }
+
+.pagination-bar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-top:12px;
+}
+.pagination-bar .page-info{
+  font-weight:900;
+  color:var(--muted);
+  text-align:center;
+}
+.voucher-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.voucher-actions button{
+  padding:9px 10px;
+  border-radius:10px;
+  font-size:12px;
+}
+.voucher-row.void{
+  background:#f9fafb;
+  color:#9ca3af;
+  opacity:.8;
+}
+.status-pill.void{
+  background:#f3f4f6;
+  color:#9ca3af;
+}

@@ -120,3 +120,18 @@ RLS must remain enabled. Do not expose service_role key.
 - Expired vouchers appear yellow.
 - Owner can copy WA messages or registration links for all available vouchers.
 - Requires SQL RPC `mvp_list_gift_codes(uuid)`.
+
+
+## Update v1.0 Voucher Control
+- Voucher list paginated: 10 voucher per page.
+- Copy WA per voucher.
+- Copy Link per voucher.
+- Delete/void available voucher only.
+- Used voucher remains grey and cannot be deleted for audit safety.
+- Generate gift code moved to Supabase batch RPC for uniqueness.
+- Codes are 9 characters.
+- Code prefix counter: A, B, C ... Z, AA, AB, AC ... plus random suffix.
+- Required SQL RPC:
+  - `mvp_generate_gift_codes_batch`
+  - `mvp_list_gift_codes_paged`
+  - `mvp_delete_gift_code`

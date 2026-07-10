@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "0.9.0";
+const APP_VERSION = "1.0.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -193,7 +193,7 @@ async function renderGiftGenerate(){
   screen(`
     <section class="card">
       <h1>Voucher Control Center</h1>
-      <p>Monitor semua gift code lama dan baru. Voucher yang sudah dipakai otomatis abu-abu, voucher yang masih available bisa dicopy ulang untuk WA.</p>
+      <p>Monitor voucher lama dan baru. 10 voucher per page. Voucher used akan abu-abu. Voucher available bisa dicopy WA atau di-delete/void kalau belum dishare.</p>
       <div id="voucher-summary" class="voucher-summary">
         <div class="stat"><div class="label">Total</div><div class="value">-</div></div>
         <div class="stat"><div class="label">Available</div><div class="value">-</div></div>
@@ -202,28 +202,33 @@ async function renderGiftGenerate(){
       </div>
       <div class="voucher-toolbar">
         <select id="voucher-filter">
-          <option value="available">Available dulu</option>
+          <option value="available">Available</option>
           <option value="all">All status</option>
           <option value="used">Used</option>
           <option value="expired">Expired</option>
+          <option value="void">Deleted / Void</option>
         </select>
-        <button class="secondary" id="copy-available-wa" type="button">Copy WA Available</button>
-        <button class="ghost" id="copy-available-links" type="button">Copy Links Available</button>
+        <button class="secondary" id="copy-page-wa" type="button">Copy WA Page Ini</button>
         <button class="ghost" id="refresh-vouchers" type="button">Refresh</button>
       </div>
       <div id="voucher-list" class="list"><div class="notice">Loading voucher list...</div></div>
+      <div class="pagination-bar">
+        <button class="ghost" id="prev-page" type="button">← Prev</button>
+        <div class="page-info" id="page-info">Page -</div>
+        <button class="ghost" id="next-page" type="button">Next →</button>
+      </div>
     </section>
 
     <section class="card">
       <h2>Generate Gift Code Baru</h2>
-      <p>Generate hanya kalau stok voucher available sudah kurang. Jangan generate terus kalau masih banyak voucher lama belum dishare.</p>
+      <p>Kode dibuat 9 karakter dan dijaga unik dari database. Counter prefix: A, B, C ... Z, AA, AB, AC ... lalu random sampai total 9 karakter.</p>
       <form id="gift-form">
         <label>Campaign / Event Name</label>
         <input id="campaign" value="Soft Opening Cacayo" required/>
         <div class="grid two">
           <div>
             <label>Jumlah Kode</label>
-            <input id="qty" inputmode="numeric" value="5" required/>
+            <input id="qty" inputmode="numeric" value="10" required/>
           </div>
           <div>
             <label>Value per Code</label>
@@ -232,17 +237,20 @@ async function renderGiftGenerate(){
         </div>
         <label>Expired Date</label>
         <input id="expired" type="date" value="2026-08-31" required/>
-        <button class="full" style="margin-top:14px">Generate Codes</button>
+        <button class="full" style="margin-top:14px">Generate 9-Digit Codes</button>
       </form>
       <div id="gift-result" style="margin-top:12px"></div>
     </section>
   `);
 
-  let vouchers = [];
   const joinBase = `${publicBaseUrl()}#join?code=`;
+  let currentPage = 1;
+  const pageSize = 10;
+  let currentRows = [];
+  let totalCount = 0;
 
   function voucherStatusClass(s){
-    return s === "used" ? "used" : (s === "expired" ? "expired" : "available");
+    return s === "used" ? "used" : (s === "expired" ? "expired" : (s === "void" ? "void" : "available"));
   }
 
   function waMessageFor(code, value){
@@ -256,32 +264,53 @@ Gift Code: ${code}
 Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
   }
 
+  async function copyText(text, label){
+    await navigator.clipboard.writeText(text);
+    alert(label);
+  }
+
+  function renderSummaryFromRows(rows){
+    // Summary visible here is based on current filter/page for speed.
+    const available = rows.filter(v=>v.voucher_status==="available").length;
+    const used = rows.filter(v=>v.voucher_status==="used").length;
+    const availableValue = rows.filter(v=>v.voucher_status==="available").reduce((a,v)=>a+Number(v.value||0),0);
+    byId("voucher-summary").innerHTML = `
+      <div class="stat"><div class="label">Total Filter</div><div class="value">${totalCount}</div></div>
+      <div class="stat"><div class="label">Available Page</div><div class="value">${available}</div></div>
+      <div class="stat"><div class="label">Used Page</div><div class="value">${used}</div></div>
+      <div class="stat"><div class="label">Available Value Page</div><div class="value">${money(availableValue)}</div></div>
+    `;
+  }
+
+  function renderPagination(){
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    byId("page-info").textContent = `Page ${currentPage} / ${totalPages} • ${totalCount} voucher`;
+    byId("prev-page").disabled = currentPage <= 1;
+    byId("next-page").disabled = currentPage >= totalPages;
+  }
+
   function renderVoucherRows(){
-    const filter = byId("voucher-filter").value;
-    let rows = [...vouchers];
-
-    if(filter === "available"){
-      rows = rows.filter(v => v.voucher_status === "available");
-    } else if(filter !== "all"){
-      rows = rows.filter(v => v.voucher_status === filter);
-    }
-
-    rows.sort((a,b)=>{
-      const priority = {available:0, used:1, expired:2};
-      return (priority[a.voucher_status] ?? 9) - (priority[b.voucher_status] ?? 9)
-        || new Date(b.created_at) - new Date(a.created_at);
-    });
-
-    if(!rows.length){
+    if(!currentRows.length){
       byId("voucher-list").innerHTML = `<div class="notice">Tidak ada voucher untuk filter ini.</div>`;
+      renderPagination();
       return;
     }
 
-    byId("voucher-list").innerHTML = rows.map(v => {
+    byId("voucher-list").innerHTML = currentRows.map(v => {
       const cls = voucherStatusClass(v.voucher_status);
+      const isAvailable = v.voucher_status === "available";
       const usedInfo = v.voucher_status === "used"
         ? `<div class="meta">Used by: ${v.used_by_name || "-"} • ${v.used_by_phone || "-"}</div>`
-        : `<div class="meta">Link: ${joinBase}${v.code}</div>`;
+        : (isAvailable ? `<div class="meta">Link: ${joinBase}${v.code}</div>` : `<div class="meta">Status: ${v.voucher_status}</div>`);
+
+      const actions = isAvailable
+        ? `<div class="voucher-actions">
+             <button class="secondary" type="button" onclick="window.copyVoucherWA('${v.code}', ${Number(v.value||0)})">Copy WA</button>
+             <button class="ghost" type="button" onclick="window.copyVoucherLink('${v.code}')">Copy Link</button>
+             <button class="danger" type="button" onclick="window.deleteVoucher('${v.gift_id}', '${v.code}')">Delete</button>
+           </div>`
+        : `<div class="voucher-actions"><span class="badge">${v.voucher_status === "used" ? "Already used" : "Not active"}</span></div>`;
+
       return `
         <div class="voucher-row ${cls}">
           <div>
@@ -292,76 +321,84 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
             <div class="campaign">${v.campaign_name || "-"}</div>
             ${usedInfo}
           </div>
-          <div class="money">${money(v.value)}</div>
-          <div><span class="status-pill ${cls}">${v.voucher_status.toUpperCase()}</span></div>
+          <div>
+            <div class="money">${money(v.value)}</div>
+            <span class="status-pill ${cls}">${v.voucher_status.toUpperCase()}</span>
+          </div>
+          ${actions}
         </div>
       `;
     }).join("");
-  }
-
-  function renderSummary(){
-    const total = vouchers.length;
-    const available = vouchers.filter(v=>v.voucher_status==="available").length;
-    const used = vouchers.filter(v=>v.voucher_status==="used").length;
-    const availableValue = vouchers.filter(v=>v.voucher_status==="available").reduce((a,v)=>a+Number(v.value||0),0);
-    byId("voucher-summary").innerHTML = `
-      <div class="stat"><div class="label">Total</div><div class="value">${total}</div></div>
-      <div class="stat"><div class="label">Available</div><div class="value">${available}</div></div>
-      <div class="stat"><div class="label">Used</div><div class="value">${used}</div></div>
-      <div class="stat"><div class="label">Available Value</div><div class="value">${money(availableValue)}</div></div>
-    `;
+    renderPagination();
   }
 
   async function loadVouchers(){
+    const filter = byId("voucher-filter").value;
+    const offset = (currentPage - 1) * pageSize;
     byId("voucher-list").innerHTML = `<div class="notice">Loading voucher list...</div>`;
     try{
-      vouchers = await rpc("mvp_list_gift_codes", {p_staff_id:u.id});
-      vouchers = vouchers || [];
-      renderSummary();
+      const rows = await rpc("mvp_list_gift_codes_paged", {
+        p_staff_id: u.id,
+        p_status: filter,
+        p_limit: pageSize,
+        p_offset: offset
+      });
+      currentRows = rows || [];
+      totalCount = currentRows.length ? Number(currentRows[0].total_count || 0) : 0;
+      renderSummaryFromRows(currentRows);
       renderVoucherRows();
     }catch(err){
       byId("voucher-list").innerHTML = `<div class="error">${err.message}</div>`;
     }
   }
 
-  byId("voucher-filter").onchange = renderVoucherRows;
-  byId("refresh-vouchers").onclick = loadVouchers;
-
-  byId("copy-available-wa").onclick = async ()=>{
-    const rows = vouchers.filter(v=>v.voucher_status==="available");
-    if(!rows.length){ alert("Tidak ada voucher available."); return; }
-    const text = rows.map(v=>waMessageFor(v.code, v.value)).join("\n\n-------------------------\n\n");
-    await navigator.clipboard.writeText(text);
-    alert(`${rows.length} WA invite available copied.`);
+  window.copyVoucherWA = async (code, value)=> copyText(waMessageFor(code, value), `WA invite ${code} copied.`);
+  window.copyVoucherLink = async (code)=> copyText(`${joinBase}${code}`, `Link ${code} copied.`);
+  window.deleteVoucher = async (giftId, code)=>{
+    if(!confirm(`Delete / void voucher ${code}? Voucher yang sudah dihapus tidak bisa dipakai customer.`)) return;
+    try{
+      await rpc("mvp_delete_gift_code", {p_staff_id:u.id, p_gift_id:giftId});
+      alert(`Voucher ${code} deleted/void.`);
+      await loadVouchers();
+    }catch(err){
+      alert(err.message);
+    }
   };
 
-  byId("copy-available-links").onclick = async ()=>{
-    const rows = vouchers.filter(v=>v.voucher_status==="available");
-    if(!rows.length){ alert("Tidak ada voucher available."); return; }
-    const text = rows.map(v=>`${joinBase}${v.code}`).join("\n");
-    await navigator.clipboard.writeText(text);
-    alert(`${rows.length} available links copied.`);
+  byId("voucher-filter").onchange = ()=>{ currentPage = 1; loadVouchers(); };
+  byId("refresh-vouchers").onclick = loadVouchers;
+  byId("prev-page").onclick = ()=>{ if(currentPage>1){ currentPage--; loadVouchers(); } };
+  byId("next-page").onclick = ()=>{ currentPage++; loadVouchers(); };
+
+  byId("copy-page-wa").onclick = async ()=>{
+    const rows = currentRows.filter(v=>v.voucher_status==="available");
+    if(!rows.length){ alert("Tidak ada voucher available di page ini."); return; }
+    await copyText(rows.map(v=>waMessageFor(v.code, v.value)).join("\n\n-------------------------\n\n"), `${rows.length} WA invite di page ini copied.`);
   };
 
   byId("gift-form").onsubmit=async(e)=>{
     e.preventDefault();
-    const qty=Math.min(parseMoney(byId("qty").value),100),
+    const qty=Math.min(parseMoney(byId("qty").value),500),
       value=parseMoney(byId("value").value),
       camp=byId("campaign").value.trim(),
       exp=byId("expired").value,
       box=byId("gift-result");
-    box.innerHTML=`<div class="notice">Generating ${qty} gift codes...</div>`;
-    const created=[];
+    box.innerHTML=`<div class="notice">Generating ${qty} unique 9-digit gift codes...</div>`;
     try{
-      for(let i=0;i<qty;i++){
-        const code=randomCode(8);
-        await rpc("mvp_generate_gift_code",{p_staff_id:u.id,p_campaign_name:camp,p_code:code,p_value:value,p_expired_at:exp});
-        created.push(code);
-      }
-      const wa=created.map(code=>waMessageFor(code,value)).join("\n\n-------------------------\n\n");
-      const links=created.map(code=>`${joinBase}${code}`).join("\n");
-      const csv=created.join("\n");
-      box.innerHTML=`<div class="success"><b>${qty} Gift Codes Generated ✅</b><br>Total Liability: ${money(qty*value)}<br>Data sudah masuk Supabase.</div><label>WA-ready Invite Messages Baru</label><textarea class="copy-area" id="waArea" readonly>${wa}</textarea><button class="secondary full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('waArea').value).then(()=>alert('WA messages copied'))">Copy WA Invite Baru</button><label>Registration Links Baru</label><textarea class="copy-area" id="linksArea" readonly>${links}</textarea><button class="secondary full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('linksArea').value).then(()=>alert('Links copied'))">Copy Links Baru</button><label>Codes Only Baru</label><textarea class="copy-area" id="codesArea" readonly>${csv}</textarea><button class="ghost full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('codesArea').value).then(()=>alert('Codes copied'))">Copy Codes Only</button>`;
+      const created = await rpc("mvp_generate_gift_codes_batch", {
+        p_staff_id:u.id,
+        p_campaign_name:camp,
+        p_value:value,
+        p_expired_at:exp,
+        p_qty:qty
+      });
+      const rows = created || [];
+      const wa=rows.map(r=>waMessageFor(r.code,value)).join("\n\n-------------------------\n\n");
+      const links=rows.map(r=>`${joinBase}${r.code}`).join("\n");
+      const csv=rows.map(r=>r.code).join("\n");
+      box.innerHTML=`<div class="success"><b>${rows.length} Gift Codes Generated ✅</b><br>Total Liability: ${money(rows.length*value)}<br>Kode 9 digit unik sudah masuk Supabase.</div><label>WA-ready Invite Messages Baru</label><textarea class="copy-area" id="waArea" readonly>${wa}</textarea><button class="secondary full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('waArea').value).then(()=>alert('WA messages copied'))">Copy WA Invite Baru</button><label>Registration Links Baru</label><textarea class="copy-area" id="linksArea" readonly>${links}</textarea><button class="secondary full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('linksArea').value).then(()=>alert('Links copied'))">Copy Links Baru</button><label>Codes Only Baru</label><textarea class="copy-area" id="codesArea" readonly>${csv}</textarea><button class="ghost full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('codesArea').value).then(()=>alert('Codes copied'))">Copy Codes Only</button>`;
+      currentPage = 1;
+      byId("voucher-filter").value = "available";
       await loadVouchers();
     }catch(err){
       box.innerHTML=`<div class="error">${err.message}</div>`;
