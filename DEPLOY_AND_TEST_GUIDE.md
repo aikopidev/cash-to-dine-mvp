@@ -212,3 +212,20 @@ Member Directory:
 - Active selected package is clearly highlighted.
 - Top up transaction metadata now stores `package_name`.
 - RPC now accepts `p_package_name`.
+
+
+## Update v1.6 Simple Top Up + Customer Home
+- Top up package UI simplified to clean cards; no overflow.
+- Kasir package cards:
+  - DIAMOND: bayar Rp5.000.000 → saldo Rp10.000.000
+  - GOLD: bayar Rp2.000.000 → saldo Rp3.500.000
+  - SILVER: bayar Rp500.000 → saldo Rp700.000
+  - CUSTOM: manual
+- After customer approves balance use, customer screen now shows:
+  - saldo dipakai
+  - sisa saldo
+  - HOME Customer button
+  - top up package info
+  - instruction: Hubungi kasir untuk top up
+- Added public `customer-home?token=...` route.
+- Fixed missing `members` route in router.

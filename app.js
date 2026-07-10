@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "1.5.0";
+const APP_VERSION = "1.6.0";
 const OUTLET = "Cacayo";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
@@ -170,52 +170,40 @@ async function renderTopup(){
   try{
     const member=await fetchMemberByPhone(phone);
     if(!member){ setHash("kasir"); return; }
+
     screen(`
       <section class="card">
         <h1>Top Up Saldo Member</h1>
-        <p>Kasir menerima pembayaran dari customer, lalu input saldo yang diberikan ke member.</p>
+        <p>Kasir menerima pembayaran di POS, lalu input invoice POS dan saldo yang diberikan ke member.</p>
         <div class="kpi"><div class="label">${member.name} • ${member.phone}</div><div class="value">${money(member.balance)}</div></div>
-        <div class="notice" style="margin-top:12px">Saldo sekarang: <b>${money(member.balance)}</b>. Setelah submit, saldo akan langsung bertambah di Supabase.</div>
       </section>
 
       <section class="card">
-        <h2>Pilih Paket / Custom</h2>
-        <div class="package-grid" id="package-grid">
-          <button type="button" class="topup-package package-diamond active" data-package="DIAMOND" data-paid="5000000" data-credit="10000000">
-            <div class="package-top"><div class="package-icon">💎</div><div class="package-badge">BEST VALUE</div></div>
-            <div class="package-title">DIAMOND</div>
-            <div class="package-pay">Bayar Rp5.000.000</div>
-            <div class="package-credit">Dapat saldo Rp10.000.000</div>
-            <div class="package-note">Premium dining credit untuk customer loyal.</div>
-            <div class="package-selected">SELECTED</div>
+        <h2>Pilih Paket Top Up</h2>
+        <div class="simple-topup-grid" id="package-grid">
+          <button type="button" class="simple-topup-card diamond active" data-package="DIAMOND" data-paid="5000000" data-credit="10000000">
+            <div class="top"><div class="name">💎 DIAMOND</div><div class="badge">BEST</div></div>
+            <div class="pay">Bayar Rp5.000.000</div>
+            <div class="credit">Dapat saldo Rp10.000.000</div>
           </button>
-          <button type="button" class="topup-package package-gold" data-package="GOLD" data-paid="2000000" data-credit="3500000">
-            <div class="package-top"><div class="package-icon">🏆</div><div class="package-badge">POPULAR</div></div>
-            <div class="package-title">GOLD</div>
-            <div class="package-pay">Bayar Rp2.000.000</div>
-            <div class="package-credit">Dapat saldo Rp3.500.000</div>
-            <div class="package-note">Paket favorit untuk regular customer.</div>
-            <div class="package-selected">SELECTED</div>
+          <button type="button" class="simple-topup-card gold" data-package="GOLD" data-paid="2000000" data-credit="3500000">
+            <div class="top"><div class="name">🏆 GOLD</div><div class="badge">POPULAR</div></div>
+            <div class="pay">Bayar Rp2.000.000</div>
+            <div class="credit">Dapat saldo Rp3.500.000</div>
           </button>
-          <button type="button" class="topup-package package-silver" data-package="SILVER" data-paid="500000" data-credit="700000">
-            <div class="package-top"><div class="package-icon">🥈</div><div class="package-badge">STARTER</div></div>
-            <div class="package-title">SILVER</div>
-            <div class="package-pay">Bayar Rp500.000</div>
-            <div class="package-credit">Dapat saldo Rp700.000</div>
-            <div class="package-note">Entry package untuk member baru.</div>
-            <div class="package-selected">SELECTED</div>
+          <button type="button" class="simple-topup-card silver" data-package="SILVER" data-paid="500000" data-credit="700000">
+            <div class="top"><div class="name">🥈 SILVER</div><div class="badge">STARTER</div></div>
+            <div class="pay">Bayar Rp500.000</div>
+            <div class="credit">Dapat saldo Rp700.000</div>
           </button>
-          <button type="button" class="topup-package package-custom" data-package="CUSTOM" data-paid="custom" data-credit="custom">
-            <div class="package-top"><div class="package-icon">✍️</div><div class="package-badge">MANUAL</div></div>
-            <div class="package-title">CUSTOM</div>
-            <div class="package-pay">Input manual</div>
-            <div class="package-credit">Nominal bebas</div>
-            <div class="package-note">Untuk kondisi khusus sesuai approval owner.</div>
-            <div class="package-selected">SELECTED</div>
+          <button type="button" class="simple-topup-card custom" data-package="CUSTOM" data-paid="custom" data-credit="custom">
+            <div class="top"><div class="name">✍️ CUSTOM</div><div class="badge">MANUAL</div></div>
+            <div class="pay">Input manual</div>
+            <div class="credit">Nominal bebas</div>
           </button>
         </div>
 
-        <form id="topup-form" style="margin-top:14px">
+        <form id="topup-form" style="margin-top:16px">
           <div class="grid two">
             <div>
               <label>Uang Diterima Kasir</label>
@@ -239,12 +227,12 @@ async function renderTopup(){
 
     function refreshPreview(){
       const paid=parseMoney(byId("cashPaid").value), credit=parseMoney(byId("creditIssued").value);
-      byId("topup-preview").innerHTML=`Paket: <b>${selectedPackage}</b><br>Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>. Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.<br>Pastikan invoice POS sudah diinput sebelum submit.`;
+      byId("topup-preview").innerHTML=`Paket: <b>${selectedPackage}</b><br>Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>.<br>Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.`;
     }
 
-    document.querySelectorAll(".topup-package").forEach(btn=>{
+    document.querySelectorAll(".simple-topup-card").forEach(btn=>{
       btn.onclick=()=>{
-        document.querySelectorAll(".topup-package").forEach(b=>b.classList.remove("active"));
+        document.querySelectorAll(".simple-topup-card").forEach(b=>b.classList.remove("active"));
         btn.classList.add("active");
         selectedPackage = btn.dataset.package || "CUSTOM";
         if(btn.dataset.paid!=="custom"){
@@ -256,6 +244,7 @@ async function renderTopup(){
         refreshPreview();
       };
     });
+
     byId("cashPaid").oninput=refreshPreview;
     byId("creditIssued").oninput=refreshPreview;
     refreshPreview();
@@ -264,17 +253,19 @@ async function renderTopup(){
       e.preventDefault();
       const box=byId("topup-result");
       const paid=parseMoney(byId("cashPaid").value), credit=parseMoney(byId("creditIssued").value);
+      const invoiceNumber = byId("invoiceNumber").value.trim();
+
       if(paid < 0 || credit <= 0){
         box.innerHTML=`<div class="error">Nominal tidak valid. Saldo yang diberikan harus lebih dari Rp0.</div>`;
         return;
       }
+      if(!invoiceNumber){
+        box.innerHTML=`<div class="error">Invoice Number dari POS wajib diisi.</div>`;
+        return;
+      }
+
       box.innerHTML=`<div class="notice">Submitting top up...</div>`;
       try{
-        const invoiceNumber = byId("invoiceNumber").value.trim();
-        if(!invoiceNumber){
-          box.innerHTML=`<div class="error">Invoice Number dari POS wajib diisi.</div>`;
-          return;
-        }
         const newBalance=await rpc("mvp_topup_member",{
           p_staff_id:user.id,
           p_member_id:member.member_id,
@@ -308,15 +299,136 @@ async function renderWaiting(){
   const interval=setInterval(async()=>{ const box=byId("waiting-status"); if(!box){clearInterval(interval);return;} try{ const rows=await rpc("mvp_get_approval",{p_token:token}); const p=rows&&rows[0]; if(!p)return; if(p.status==="approved"){ box.className="success"; box.innerHTML="Status: Approved ✅"; setTimeout(()=>setHash("success",{token}),700); clearInterval(interval); } else if(p.status==="rejected"){ box.className="error"; box.innerHTML="Status: Rejected ❌"; clearInterval(interval); } else { box.className="notice"; box.innerHTML=`Status: ${p.status}`; } }catch(e){ console.warn(e); } },2500);
 }
 
-async function renderApprove(){
-  const {params}=getRoute(); const token=params.token; byId("app").innerHTML=`<main style="padding:16px;max-width:520px;margin:auto"></main>`; const target=document.querySelector("main"); target.innerHTML=`<section class="card"><h1>Loading approval...</h1></section>`;
-  try{ const rows=await rpc("mvp_get_approval",{p_token:token}); if(!rows||!rows.length) throw new Error("Approval tidak ditemukan."); const p=rows[0]; target.innerHTML=`<section class="card"><h1>Approve Pemakaian Saldo</h1><p>${OUTLET} Dining Club</p><div class="approval-alert"><div style="font-weight:900">⚠️ Permintaan Pemakaian Saldo</div><div class="big-money">${money(p.balance_used)}</div><div>Pastikan nominal ini sesuai dengan instruksi kasir di POS sebelum memasukkan PIN. Saldo setelah approval: <b>${money(p.balance_after)}</b>.</div></div><div class="item"><div class="title">Member</div><div class="meta">${p.member_name} • ${p.member_phone}</div></div><form id="approve-form"><label>Password / PIN Membership</label><input id="pass" type="password" placeholder="Password customer" required/><button class="ok full" style="margin-top:14px">Approve Pemakaian Saldo</button></form><button class="ghost full" style="margin-top:8px" id="rejectBtn">Tolak</button><div id="approve-result" style="margin-top:12px"></div></section>`;
-    if(p.status!=="waiting") byId("approve-result").innerHTML=`<div class="notice">Status request: ${p.status}</div>`;
-    byId("rejectBtn").onclick=async()=>{ try{ await rpc("mvp_reject_approval",{p_token:token}); byId("approve-result").innerHTML=`<div class="error">Transaksi ditolak. Saldo tidak berubah.</div>`; }catch(err){ byId("approve-result").innerHTML=`<div class="error">${err.message}</div>`; } };
-    byId("approve-form").onsubmit=async(e)=>{ e.preventDefault(); const box=byId("approve-result"); box.innerHTML=`<div class="notice">Approving...</div>`; try{ const rows=await rpc("mvp_approve_balance_use",{p_token:token,p_password:byId("pass").value}); const d=rows&&rows[0]?rows[0]:{}; target.innerHTML=`<section class="card"><div class="approve-success-screen"><div class="check">✓</div><h1>Saldo Berhasil Dipakai</h1><p>Approval berhasil. Form PIN sudah ditutup untuk keamanan.</p></div><div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div><div class="item"><div class="title">Saldo Tersisa</div><div class="meta">${money(d.balance_after||0)}</div></div><div class="success" style="margin-top:12px">Silakan kembali ke kasir. Tablet kasir akan otomatis berubah menjadi Approved.</div></section>`; }catch(err){ box.innerHTML=`<div class="error">${err.message}</div>`; } };
-  }catch(err){ target.innerHTML=`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`; }
+
+function customerTopupInfoHtml(){
+  return `
+    <section class="card">
+      <h2>Tambah Saldo Dining Credit</h2>
+      <p>Top up tetap dilakukan di kasir/POS. Tunjukkan halaman ini ke kasir untuk tambah saldo.</p>
+      <div class="customer-topup-grid">
+        <div class="customer-topup-card">
+          <div class="title">💎 DIAMOND</div>
+          <div class="desc">Bayar Rp5.000.000 → Saldo Rp10.000.000</div>
+        </div>
+        <div class="customer-topup-card">
+          <div class="title">🏆 GOLD</div>
+          <div class="desc">Bayar Rp2.000.000 → Saldo Rp3.500.000</div>
+        </div>
+        <div class="customer-topup-card">
+          <div class="title">🥈 SILVER</div>
+          <div class="desc">Bayar Rp500.000 → Saldo Rp700.000</div>
+        </div>
+      </div>
+      <div class="customer-topup-note">Hubungi kasir untuk top up. Pembayaran dan invoice tetap melalui POS.</div>
+    </section>
+  `;
 }
 
+async function renderCustomerHome(){
+  const {params}=getRoute();
+  const token=params.token;
+  byId("app").innerHTML=`<main style="padding:16px;max-width:560px;margin:auto"></main>`;
+  const target=document.querySelector("main");
+  target.innerHTML=`<section class="card"><h1>Loading customer home...</h1></section>`;
+  try{
+    if(!token) throw new Error("Customer token tidak ditemukan.");
+    const rows=await rpc("mvp_get_approval",{p_token:token});
+    if(!rows||!rows.length) throw new Error("Data customer tidak ditemukan.");
+    const p=rows[0];
+    const saldo = p.balance_after ?? p.balance_before ?? 0;
+    target.innerHTML=`
+      <section class="card">
+        <div class="customer-home-header">
+          <h1>${OUTLET} Dining Club</h1>
+          <p>${p.member_name || "Member"} • ${p.member_phone || ""}</p>
+        </div>
+        <div class="kpi"><div class="label">Saldo Saat Ini</div><div class="value">${money(saldo)}</div></div>
+        <div class="notice" style="margin-top:12px">Ini adalah halaman customer. Untuk pembayaran/top up, tetap hubungi kasir.</div>
+      </section>
+      ${customerTopupInfoHtml()}
+    `;
+  }catch(err){
+    target.innerHTML=`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`;
+  }
+}
+
+async function renderApprove(){
+  const {params}=getRoute();
+  const token=params.token;
+  byId("app").innerHTML=`<main style="padding:16px;max-width:560px;margin:auto"></main>`;
+  const target=document.querySelector("main");
+  target.innerHTML=`<section class="card"><h1>Loading approval...</h1></section>`;
+
+  try{
+    const rows=await rpc("mvp_get_approval",{p_token:token});
+    if(!rows||!rows.length) throw new Error("Approval tidak ditemukan.");
+    const p=rows[0];
+
+    target.innerHTML=`
+      <section class="card">
+        <h1>Approve Pemakaian Saldo</h1>
+        <p>${OUTLET} Dining Club</p>
+        <div class="approval-alert">
+          <div style="font-weight:900">⚠️ Permintaan Pemakaian Saldo</div>
+          <div class="big-money">${money(p.balance_used)}</div>
+          <div>Pastikan nominal ini sesuai instruksi kasir di POS sebelum memasukkan PIN.</div>
+          <div>Saldo setelah approval: <b>${money(p.balance_after)}</b>.</div>
+        </div>
+        <div class="item"><div class="title">Member</div><div class="meta">${p.member_name} • ${p.member_phone}</div></div>
+        <form id="approve-form">
+          <label>Password / PIN Membership</label>
+          <input id="pass" type="password" placeholder="Password customer" required/>
+          <button class="ok full" style="margin-top:14px">Approve Pemakaian Saldo</button>
+        </form>
+        <button class="ghost full" style="margin-top:8px" id="rejectBtn">Tolak</button>
+        <div id="approve-result" style="margin-top:12px"></div>
+      </section>
+    `;
+
+    if(p.status!=="waiting"){
+      byId("approve-result").innerHTML=`<div class="notice">Status request: ${p.status}</div>`;
+    }
+
+    byId("rejectBtn").onclick=async()=>{
+      try{
+        await rpc("mvp_reject_approval",{p_token:token});
+        byId("approve-result").innerHTML=`<div class="error">Transaksi ditolak. Saldo tidak berubah.</div>`;
+      }catch(err){
+        byId("approve-result").innerHTML=`<div class="error">${err.message}</div>`;
+      }
+    };
+
+    byId("approve-form").onsubmit=async(e)=>{
+      e.preventDefault();
+      const box=byId("approve-result");
+      box.innerHTML=`<div class="notice">Approving...</div>`;
+      try{
+        const rows=await rpc("mvp_approve_balance_use",{p_token:token,p_password:byId("pass").value});
+        const d=rows&&rows[0]?rows[0]:{};
+        const saldoAfter = d.balance_after ?? p.balance_after ?? 0;
+
+        target.innerHTML=`
+          <section class="card">
+            <div class="customer-home-header">
+              <div class="check">✓</div>
+              <h1>Saldo Berhasil Dipakai</h1>
+              <p>Approval berhasil. Form PIN sudah ditutup.</p>
+            </div>
+            <div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div>
+            <div class="item"><div class="title">Sisa Saldo</div><div class="meta"><b>${money(saldoAfter)}</b></div></div>
+            <div class="success" style="margin-top:12px">Transaksi berhasil. Silakan kembali ke kasir untuk menyelesaikan bill di POS.</div>
+            <button class="full" style="margin-top:14px" onclick="location.hash='customer-home?token=${token}'">HOME Customer</button>
+          </section>
+          ${customerTopupInfoHtml()}
+        `;
+      }catch(err){
+        box.innerHTML=`<div class="error">${err.message}</div>`;
+      }
+    };
+  }catch(err){
+    target.innerHTML=`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`;
+  }
+}
 async function renderSuccess(){
   const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); try{ const rows=await rpc("mvp_get_approval",{p_token:params.token}); const p=rows&&rows[0]; if(!p) throw new Error("Approval not found"); screen(`<section class="card"><h1>Saldo Berhasil Dipakai ✅</h1><div class="item"><div class="title">Member</div><div class="meta">${p.member_name} • ${p.member_phone}</div></div><div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div><div class="item"><div class="title">Saldo Sisa</div><div class="meta">${money(p.balance_after)}</div></div><div class="notice">Kasir tetap validasi manual di POS: masukkan payment Voucher/Cash to Dine sebesar ${money(p.balance_used)}. Sisa bill, kalau ada, dibayar QRIS/Cash/Card di POS.</div><button class="full" style="margin-top:12px" onclick="setHash('kasir')">Transaksi Baru</button></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
 }
@@ -737,7 +849,7 @@ async function renderReport(){
   const u=requireLogin(); if(!u)return; mountLayout(); setNav("report"); screen(`<section class="card"><h1>Loading report...</h1></section>`); try{ const rows=await rpc("mvp_recent_transactions",{p_staff_id:u.id}); screen(`<section class="card"><h1>Transaction Report</h1><div class="list">${rows&&rows.length?rows.map(t=>`<div class="item"><div class="title">${t.type} • ${money(t.balance_used||t.credit_issued||0)}</div><div class="meta">${t.member_name||"-"} • ${t.member_phone||"-"} • ${new Date(t.created_at).toLocaleString("id-ID")}</div><div class="meta">Status: ${t.status}</div></div>`).join(""):`<p>Belum ada transaksi.</p>`}</div></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
 }
 
-function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
+function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="customer-home")return renderCustomerHome(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="members")return renderMembers(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
 window.addEventListener("hashchange", route);
 window.addEventListener("load", route);
 

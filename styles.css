@@ -542,3 +542,123 @@ button:disabled{
     grid-template-columns:1fr;
   }
 }
+
+
+/* v1.6 Clean Top Up UI */
+.simple-topup-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  margin-top:12px;
+}
+.simple-topup-card{
+  border:1px solid var(--line);
+  border-radius:18px;
+  background:#fff;
+  padding:16px;
+  min-height:120px;
+  text-align:left;
+  cursor:pointer;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  gap:8px;
+  color:#111827;
+  box-shadow:0 8px 22px rgba(15,23,42,.06);
+}
+.simple-topup-card:hover{
+  background:#f9fafb;
+}
+.simple-topup-card.active{
+  border-color:#111827;
+  box-shadow:0 0 0 3px rgba(17,24,39,.10), 0 10px 26px rgba(15,23,42,.10);
+}
+.simple-topup-card .top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.simple-topup-card .name{
+  font-size:20px;
+  font-weight:950;
+  letter-spacing:-.03em;
+}
+.simple-topup-card .badge{
+  font-size:11px;
+  padding:5px 8px;
+  border-radius:999px;
+  background:#f3f4f6;
+  font-weight:900;
+}
+.simple-topup-card .pay{
+  color:#6b7280;
+  font-weight:800;
+  font-size:14px;
+}
+.simple-topup-card .credit{
+  font-size:18px;
+  font-weight:950;
+}
+.simple-topup-card.diamond{
+  border-left:7px solid #6366f1;
+}
+.simple-topup-card.gold{
+  border-left:7px solid #f59e0b;
+}
+.simple-topup-card.silver{
+  border-left:7px solid #94a3b8;
+}
+.simple-topup-card.custom{
+  border-left:7px solid #111827;
+}
+.customer-home-header{
+  text-align:center;
+  padding:16px 0 8px;
+}
+.customer-home-header .check{
+  width:64px;
+  height:64px;
+  border-radius:999px;
+  display:grid;
+  place-items:center;
+  background:#d1fae5;
+  color:#065f46;
+  margin:0 auto 12px;
+  font-size:34px;
+  font-weight:950;
+}
+.customer-topup-grid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:10px;
+  margin-top:10px;
+}
+.customer-topup-card{
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:14px;
+  background:#fff;
+}
+.customer-topup-card .title{
+  font-weight:950;
+  font-size:17px;
+}
+.customer-topup-card .desc{
+  color:#6b7280;
+  margin-top:4px;
+}
+.customer-topup-note{
+  background:#eef2ff;
+  border:1px solid #c7d2fe;
+  color:#1e3a8a;
+  border-radius:16px;
+  padding:14px;
+  margin-top:12px;
+  font-weight:800;
+}
+@media(max-width:720px){
+  .simple-topup-grid{
+    grid-template-columns:1fr;
+  }
+}
