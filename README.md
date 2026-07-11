@@ -279,3 +279,11 @@ Member Directory:
 - Added public route: `#customer-reset-home?token=...`.
 - Customer reset home shows member name, phone, member ID, current balance, and top-up package info.
 - Required SQL patch updates `mvp_get_pin_reset_request` to return member_code and balance.
+
+
+## Update v2.3 Link Preview Title
+- Browser/WhatsApp preview title changed to customer-facing copy:
+  `Cash to Dine by CACAYO — Dining Credit Membership`
+- Meta description added:
+  `Top up saldo makan, nikmati bonus dining credit, dan pakai saldo langsung di CACAYO.`
+- No SQL change required.
