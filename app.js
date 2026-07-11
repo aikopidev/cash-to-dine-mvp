@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "2.0.0";
+const APP_VERSION = "2.1.0";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
 const OUTLET_SLUG = "cacayo";
@@ -47,7 +47,7 @@ function screen(html){ byId("screen").innerHTML = html; }
 function setNav(active){
   const u=currentUser(); const nav=byId("bottom-nav"); if(!nav||!u) return;
   if(u.role==="owner"){
-    nav.innerHTML = `<button class="${active==='owner'?'active':''}" onclick="setHash('owner')">Dashboard</button><button class="${active==='gift'?'active':''}" onclick="setHash('gift-generate')">Gift Code</button><button class="${active==='report'?'active':''}" onclick="setHash('report')">Report</button><button class="${active==='kasir'?'active':''}" onclick="setHash('kasir')">Kasir</button>`;
+    nav.innerHTML = `<button class="${active==='owner'?'active':''}" onclick="setHash('owner')">Dashboard</button><button class="${active==='members'?'active':''}" onclick="setHash('members')">Members</button><button class="${active==='gift'?'active':''}" onclick="setHash('gift-generate')">Voucher</button><button class="${active==='report'?'active':''}" onclick="setHash('report')">Report</button><button class="${active==='kasir'?'active':''}" onclick="setHash('kasir')">Kasir</button>`;
   } else {
     nav.innerHTML = `<button class="${active==='kasir'?'active':''}" onclick="setHash('kasir')">Kasir</button><button class="${active==='register'?'active':''}" onclick="setHash('join')">Daftar</button><button class="${active==='report'?'active':''}" onclick="setHash('report')">Report</button>`;
   }
@@ -153,10 +153,98 @@ async function renderKasir(){
 }
 async function fetchMemberByPhone(phone){ const u=currentUser(); const rows=await rpc("mvp_search_member",{p_staff_id:u.id, p_phone:normalizePhone(phone)}); return rows&&rows.length?rows[0]:null; }
 async function renderMember(){
-  const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); const phone=normalizePhone(params.phone||""); screen(`<section class="card"><h1>Loading member...</h1></section>`);
-  try{ const m=await fetchMemberByPhone(phone); if(!m){ screen(`<section class="card"><h1>Member tidak ditemukan</h1><p>No HP: <b>${phone||"-"}</b></p><button class="full" onclick="setHash('join',{phone:'${phone}'})">Daftarkan Member</button><button class="ghost full" style="margin-top:8px" onclick="setHash('kasir')">Kembali</button></section>`); return; }
-    screen(`<section class="card"><h1>${m.name}</h1><div class="row"><span class="badge ok">${m.status.toUpperCase()}</span><span class="badge">${m.member_code}</span></div><div class="divider"></div><div class="kpi"><div class="label">Saldo Dining</div><div class="value">${money(m.balance)}</div></div><div class="grid two" style="margin-top:12px"><button onclick="setHash('topup',{phone:'${m.phone}'})">Top Up Saldo</button><button class="secondary" onclick="setHash('use-balance',{phone:'${m.phone}'})">Gunakan Saldo</button></div></section><section class="card"><h3>Detail</h3><div class="item"><div class="title">HP</div><div class="meta">${m.phone}</div></div><div class="item"><div class="title">Member ID</div><div class="meta">${m.member_code}</div></div></section>`);
-  }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
+  const u=requireLogin(); if(!u) return;
+  mountLayout(); setNav("kasir");
+  const {params}=getRoute();
+  const phone=normalizePhone(params.phone||"");
+  screen(`<section class="card"><h1>Loading member...</h1></section>`);
+
+  try{
+    const m=await fetchMemberByPhone(phone);
+    if(!m){
+      screen(`<section class="card"><h1>Member tidak ditemukan</h1><p>No HP: <b>${phone||"-"}</b></p><button class="full" onclick="setHash('join',{phone:'${phone}'})">Daftarkan Member</button><button class="ghost full" style="margin-top:8px" onclick="setHash('kasir')">Kembali</button></section>`);
+      return;
+    }
+
+    const ownerControls = u.role === "owner" ? `
+      <section class="card">
+        <h2>Owner Controls</h2>
+        <p>Hanya owner yang bisa reset PIN dan delete member. Kasir tidak punya akses.</p>
+        <div class="grid two">
+          <button class="secondary" id="reset-pin-btn">Reset PIN via QR</button>
+          <button class="danger" id="delete-member-btn">Delete Member</button>
+        </div>
+        <div id="owner-action-result" style="margin-top:12px"></div>
+      </section>
+    ` : "";
+
+    screen(`
+      <section class="card">
+        <h1>${m.name}</h1>
+        <div class="row"><span class="badge ok">${m.status.toUpperCase()}</span><span class="badge">${m.member_code}</span></div>
+        <div class="divider"></div>
+        <div class="kpi"><div class="label">Saldo Dining</div><div class="value">${money(m.balance)}</div></div>
+        <div class="grid two" style="margin-top:12px">
+          <button onclick="setHash('topup',{phone:'${m.phone}'})">Top Up Saldo</button>
+          <button class="secondary" onclick="setHash('use-balance',{phone:'${m.phone}'})">Gunakan Saldo</button>
+        </div>
+      </section>
+      <section class="card">
+        <h3>Detail</h3>
+        <div class="item"><div class="title">HP</div><div class="meta">${m.phone}</div></div>
+        <div class="item"><div class="title">Member ID</div><div class="meta">${m.member_code}</div></div>
+      </section>
+      ${ownerControls}
+    `);
+
+    if(u.role === "owner"){
+      byId("reset-pin-btn").onclick = async ()=>{
+        const box = byId("owner-action-result");
+        box.innerHTML = `<div class="notice">Membuat QR reset PIN...</div>`;
+        try{
+          const token = "PIN" + randomCode(20);
+          const rows = await rpc("mvp_create_pin_reset_request", {
+            p_staff_id: u.id,
+            p_member_id: m.member_id,
+            p_token: token
+          });
+          const d = rows && rows[0] ? rows[0] : {};
+          const resetToken = d.token || token;
+          const link = `${publicBaseUrl()}#reset-pin?token=${resetToken}`;
+          box.innerHTML = `
+            <div class="success"><b>QR Reset PIN siap ✅</b><br>Customer scan QR ini untuk buat PIN baru.</div>
+            <div class="qr-wrap">
+              <img class="qr-img" src="${qrImageUrl(link)}" alt="QR Reset PIN"/>
+              <div class="meta">Berlaku sampai: ${d.expires_at || "30 menit"}</div>
+            </div>
+            <label>Reset PIN Link</label>
+            <textarea class="copy-area" readonly>${link}</textarea>
+            <button class="secondary full" onclick="navigator.clipboard.writeText('${link}').then(()=>alert('Reset PIN link copied'))">Copy Reset Link</button>
+          `;
+        }catch(err){
+          box.innerHTML = `<div class="error">${err.message}</div>`;
+        }
+      };
+
+      byId("delete-member-btn").onclick = async ()=>{
+        const ok = confirm(`Delete member ${m.name} (${m.phone})?\n\nMember akan dihapus dari search/list dan saldo akan di-set Rp0. Aksi ini hanya untuk owner.`);
+        if(!ok) return;
+        const box = byId("owner-action-result");
+        box.innerHTML = `<div class="notice">Deleting member...</div>`;
+        try{
+          await rpc("mvp_delete_member", {
+            p_staff_id: u.id,
+            p_member_id: m.member_id
+          });
+          box.innerHTML = `<div class="success"><b>Member Deleted ✅</b><br>Member tidak akan muncul lagi di search/top up.</div><button class="full" style="margin-top:10px" onclick="setHash('members')">Kembali ke All Members</button>`;
+        }catch(err){
+          box.innerHTML = `<div class="error">${err.message}</div>`;
+        }
+      };
+    }
+  }catch(err){
+    screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`);
+  }
 }
 
 function renderJoin(){
@@ -776,7 +864,7 @@ async function renderMembers(){
   screen(`
     <section class="card">
       <h1>All Members</h1>
-      <p>List simple semua member yang pernah daftar. Data langsung dari Supabase.</p>
+      <p>List simple semua member aktif. Owner bisa buka detail member untuk reset PIN atau delete member.</p>
       <div class="voucher-toolbar">
         <input id="member-query" placeholder="Search nama / nomor HP..." autocomplete="off" />
         <button class="secondary" id="export-txt" type="button">Export TXT</button>
@@ -819,6 +907,7 @@ async function renderMembers(){
               <th>Member ID</th>
               <th>Saldo</th>
               <th>Status</th>
+              <th>Action</th>
             </tr>
           </thead>
           <tbody>
@@ -830,6 +919,7 @@ async function renderMembers(){
                 <td>${m.member_code || "-"}</td>
                 <td><b>${money(m.balance || 0)}</b></td>
                 <td>${m.status || "active"}</td>
+                <td><button class="ghost" onclick="setHash('member',{phone:'${m.phone}'})">Open</button></td>
               </tr>
             `).join("")}
           </tbody>
@@ -897,11 +987,85 @@ async function renderMembers(){
 
   await loadMembers();
 }
+
 async function renderReport(){
   const u=requireLogin(); if(!u)return; mountLayout(); setNav("report"); screen(`<section class="card"><h1>Loading report...</h1></section>`); try{ const rows=await rpc("mvp_recent_transactions",{p_staff_id:u.id}); screen(`<section class="card"><h1>Transaction Report</h1><div class="list">${rows&&rows.length?rows.map(t=>`<div class="item"><div class="title">${t.type} • ${money(t.balance_used||t.credit_issued||0)}</div><div class="meta">${t.member_name||"-"} • ${t.member_phone||"-"} • ${new Date(t.created_at).toLocaleString("id-ID")}</div><div class="meta">Status: ${t.status}</div></div>`).join(""):`<p>Belum ada transaksi.</p>`}</div></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
 }
 
-function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="customer-home")return renderCustomerHome(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="members")return renderMembers(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
+async function renderResetPin(){
+  const {params}=getRoute();
+  const token=params.token;
+  byId("app").innerHTML=`<main style="padding:16px;max-width:560px;margin:auto"></main>`;
+  const target=document.querySelector("main");
+  target.innerHTML=`<section class="card"><h1>Loading reset PIN...</h1></section>`;
+
+  try{
+    if(!token) throw new Error("Reset token tidak ditemukan.");
+    const rows=await rpc("mvp_get_pin_reset_request",{p_token:token});
+    if(!rows||!rows.length) throw new Error("Reset PIN request tidak ditemukan.");
+    const p=rows[0];
+
+    target.innerHTML=`
+      <section class="card">
+        ${brandMiniHtml()}
+        <h1>Buat PIN Baru</h1>
+        <p>${OUTLET_FULL}</p>
+        <div class="notice">
+          Member: <b>${p.member_name}</b><br>
+          HP: <b>${p.member_phone}</b><br>
+          PIN wajib 6 digit angka. <b>MOHON PIN DI INGAT / DI SCREENSHOT.</b>
+        </div>
+        <form id="reset-pin-form">
+          <label>PIN Baru 6 Digit</label>
+          <input id="new-pin" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="Contoh: 123456" required/>
+          <div class="search-hint"><b>PIN akan tampil jelas.</b> Mohon screenshot sebelum submit.</div>
+          <button class="full" style="margin-top:14px">Simpan PIN Baru</button>
+        </form>
+        <div id="reset-pin-result" style="margin-top:12px"></div>
+      </section>
+    `;
+
+    if(p.status !== "waiting"){
+      byId("reset-pin-form").style.display = "none";
+      byId("reset-pin-result").innerHTML = `<div class="notice">Reset PIN status: ${p.status}. Link ini sudah tidak aktif.</div>`;
+      return;
+    }
+
+    byId("reset-pin-form").onsubmit = async(e)=>{
+      e.preventDefault();
+      const box=byId("reset-pin-result");
+      const pin=byId("new-pin").value.trim();
+      if(!/^[0-9]{6}$/.test(pin)){
+        box.innerHTML=`<div class="error">PIN baru wajib 6 digit angka.</div>`;
+        return;
+      }
+      box.innerHTML=`<div class="notice">Menyimpan PIN baru...</div>`;
+      try{
+        await rpc("mvp_complete_pin_reset",{
+          p_token:token,
+          p_new_pin:pin
+        });
+        target.innerHTML=`
+          <section class="card">
+            ${brandMiniHtml()}
+            <div class="customer-home-header">
+              <div class="check">✓</div>
+              <h1>PIN Baru Berhasil Disimpan</h1>
+              <p>Gunakan PIN ini untuk approval transaksi saldo berikutnya.</p>
+            </div>
+            <div class="success"><b>MOHON PIN DI INGAT / DI SCREENSHOT.</b></div>
+          </section>
+        `;
+      }catch(err){
+        box.innerHTML=`<div class="error">${err.message}</div>`;
+      }
+    };
+  }catch(err){
+    target.innerHTML=`<section class="card">${brandMiniHtml()}<h1>Error</h1><div class="error">${err.message}</div></section>`;
+  }
+}
+
+function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="customer-home")return renderCustomerHome(); if(name==="reset-pin")return renderResetPin(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="members")return renderMembers(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
 window.addEventListener("hashchange", route);
 window.addEventListener("load", route);
 

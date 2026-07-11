@@ -774,3 +774,15 @@ label .meta{
   font-weight:800;
   color:var(--muted);
 }
+
+
+/* v2.1 Owner Reset PIN + Delete Member */
+button.danger,
+.danger{
+  background:#dc2626 !important;
+  color:#fff !important;
+  border-color:#dc2626 !important;
+}
+button.danger:hover{
+  background:#b91c1c !important;
+}

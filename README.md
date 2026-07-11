@@ -254,3 +254,19 @@ Member Directory:
 - If Gift Code is filled, normal voucher lifecycle applies: Available → Terdaftar.
 - PIN remains 6 digit and visible during registration for screenshot.
 - Required SQL RPC patch: `mvp_claim_gift_code` updated.
+
+
+## Update v2.1 Owner Reset PIN + Delete Member
+- Owner can reset member PIN via QR.
+- Customer scans reset QR and creates a new 6 digit PIN.
+- New PIN is visible on customer reset page so it can be screenshotted.
+- Owner can delete member.
+- Kasir cannot reset PIN or delete member.
+- Delete member is implemented as soft delete + wallet balance set to 0, so the member disappears from search/list and cannot be used.
+- Required SQL:
+  - `member_pin_reset_requests` table
+  - `mvp_create_pin_reset_request`
+  - `mvp_get_pin_reset_request`
+  - `mvp_complete_pin_reset`
+  - `mvp_delete_member`
+  - patched member search/list/registration functions to ignore deleted members.
