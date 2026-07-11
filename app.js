@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "1.7.0";
+const APP_VERSION = "1.8.0";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
 const OUTLET_SLUG = "cacayo";
@@ -176,8 +176,8 @@ function renderJoin(){
         <label>No HP</label>
         <input id="phone" inputmode="numeric" placeholder="628xxxxxxxxxx" value="${params.phone||""}" required/>
         <label>PIN Membership 6 Digit</label>
-        <input id="pass" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="Contoh: 123456" required/>
-        <div class="search-hint">MOHON PIN DI INGAT / DI SCREENSHOT.</div>
+        <input id="pass" type="text" inputmode="numeric" maxlength="6" pattern="[0-9]{6}" placeholder="Contoh: 123456" required/>
+        <div class="search-hint"><b>PIN akan tampil jelas.</b> MOHON PIN DI INGAT / DI SCREENSHOT.</div>
         <label>Gift Code / Invite Code</label>
         <input id="gift" class="code-box" placeholder="A7K9P2QX3" value="${params.code||""}" required/>
         <button class="full" style="margin-top:14px">Daftar Sekarang</button>

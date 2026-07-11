@@ -230,3 +230,11 @@ Member Directory:
 - Registration PIN must be exactly 6 digits.
 - Customer is warned: `MOHON PIN DI INGAT / DI SCREENSHOT`.
 - Top up transaction metadata stores package name and valid months.
+
+
+## Update v1.8 Show Register PIN
+- Registration PIN input changed from password-masked to visible text.
+- PIN still must be exactly 6 digits.
+- UI warns customer to remember/screenshot the PIN.
+- Transaction approval PIN remains separate from this registration UI change.
+- No SQL change required if v1.7 SQL already ran.
