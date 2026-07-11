@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "2.1.0";
+const APP_VERSION = "2.2.0";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
 const OUTLET_SLUG = "cacayo";
@@ -1045,6 +1045,7 @@ async function renderResetPin(){
           p_token:token,
           p_new_pin:pin
         });
+        const homeLink = `#customer-reset-home?token=${token}`;
         target.innerHTML=`
           <section class="card">
             ${brandMiniHtml()}
@@ -1053,7 +1054,12 @@ async function renderResetPin(){
               <h1>PIN Baru Berhasil Disimpan</h1>
               <p>Gunakan PIN ini untuk approval transaksi saldo berikutnya.</p>
             </div>
-            <div class="success"><b>MOHON PIN DI INGAT / DI SCREENSHOT.</b></div>
+            <div class="pin-confirm-box">
+              <div class="label">PIN Baru Kamu</div>
+              <div class="pin-number">${pin}</div>
+              <div class="success"><b>MOHON PIN DI INGAT / DI SCREENSHOT.</b></div>
+            </div>
+            <button class="full" style="margin-top:14px" onclick="location.hash='${homeLink}'">Kembali ke Home Customer</button>
           </section>
         `;
       }catch(err){
@@ -1065,7 +1071,43 @@ async function renderResetPin(){
   }
 }
 
-function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="customer-home")return renderCustomerHome(); if(name==="reset-pin")return renderResetPin(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="members")return renderMembers(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
+async function renderCustomerResetHome(){
+  const {params}=getRoute();
+  const token=params.token;
+  byId("app").innerHTML=`<main style="padding:16px;max-width:560px;margin:auto"></main>`;
+  const target=document.querySelector("main");
+  target.innerHTML=`<section class="card">${brandMiniHtml()}<h1>Loading Home Customer...</h1></section>`;
+
+  try{
+    if(!token) throw new Error("Customer token tidak ditemukan.");
+    const rows=await rpc("mvp_get_pin_reset_request",{p_token:token});
+    if(!rows||!rows.length) throw new Error("Customer home tidak ditemukan.");
+    const p=rows[0];
+
+    target.innerHTML=`
+      <section class="card">
+        ${brandMiniHtml()}
+        <div class="customer-home-header">
+          <div class="check">✓</div>
+          <h1>Home Customer</h1>
+          <p>${OUTLET_FULL}</p>
+        </div>
+        <div class="kpi">
+          <div class="label">${p.member_name || "-"}</div>
+          <div class="value">${money(p.balance || 0)}</div>
+        </div>
+        <div class="item"><div class="title">No HP</div><div class="meta">${p.member_phone || "-"}</div></div>
+        <div class="item"><div class="title">Member ID</div><div class="meta">${p.member_code || "-"}</div></div>
+        <div class="success" style="margin-top:12px">PIN sudah berhasil di-update. Gunakan PIN baru untuk approve transaksi saldo berikutnya.</div>
+      </section>
+      ${customerTopupInfoHtml()}
+    `;
+  }catch(err){
+    target.innerHTML=`<section class="card">${brandMiniHtml()}<h1>Error</h1><div class="error">${err.message}</div></section>`;
+  }
+}
+
+function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="customer-home")return renderCustomerHome(); if(name==="customer-reset-home")return renderCustomerResetHome(); if(name==="reset-pin")return renderResetPin(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="members")return renderMembers(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
 window.addEventListener("hashchange", route);
 window.addEventListener("load", route);
 

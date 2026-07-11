@@ -270,3 +270,12 @@ Member Directory:
   - `mvp_complete_pin_reset`
   - `mvp_delete_member`
   - patched member search/list/registration functions to ignore deleted members.
+
+
+## Update v2.2 Reset PIN Confirmation + Home Customer
+- After customer successfully resets PIN, confirmation page shows the new PIN clearly.
+- Screenshot reminder remains visible.
+- Added button: `Kembali ke Home Customer`.
+- Added public route: `#customer-reset-home?token=...`.
+- Customer reset home shows member name, phone, member ID, current balance, and top-up package info.
+- Required SQL patch updates `mvp_get_pin_reset_request` to return member_code and balance.

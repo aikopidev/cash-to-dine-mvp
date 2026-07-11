@@ -786,3 +786,35 @@ button.danger,
 button.danger:hover{
   background:#b91c1c !important;
 }
+
+
+/* v2.2 Reset PIN Confirmation */
+.pin-confirm-box{
+  margin-top:16px;
+  padding:18px;
+  border-radius:18px;
+  border:1px solid var(--line);
+  background:#fff7ed;
+  text-align:center;
+}
+.pin-confirm-box .label{
+  font-size:13px;
+  color:var(--muted);
+  font-weight:900;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.pin-confirm-box .pin-number{
+  font-size:42px;
+  line-height:1;
+  font-weight:1000;
+  letter-spacing:.18em;
+  margin:10px 0 14px;
+  color:#111827;
+  font-variant-numeric:tabular-nums;
+}
+@media(max-width:520px){
+  .pin-confirm-box .pin-number{
+    font-size:36px;
+  }
+}
