@@ -251,3 +251,10 @@ Member Directory:
 - UI warns customer to remember/screenshot the PIN.
 - Transaction approval PIN remains separate from this registration UI change.
 - No SQL change required if v1.7 SQL already ran.
+
+
+## Update v1.9 Bigger CACAYO Logo
+- CACAYO logo enlarged and adjusted for landscape aspect ratio.
+- Topbar logo is now more visible.
+- Public/register/customer logo is larger but still clean.
+- No SQL change required.
