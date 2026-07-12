@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "3.0.2";
+const APP_VERSION = "3.1.1";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -214,6 +214,70 @@ function historyListHtml(rows, emptyText="Belum ada transaksi."){
   }).join("")}</div>`;
 }
 
+
+function dateID(value){
+  if(!value) return "Tanpa tanggal expired";
+  const d = new Date(value);
+  if(Number.isNaN(d.getTime())) return "-";
+  return d.toLocaleDateString("id-ID", {
+    day:"2-digit",
+    month:"long",
+    year:"numeric"
+  });
+}
+
+function expiryDays(value){
+  if(!value) return null;
+  const end = new Date(value).getTime();
+  if(Number.isNaN(end)) return null;
+  return Math.max(0, Math.ceil((end-Date.now())/86400000));
+}
+
+function addMonthsFrom(value, months){
+  const base = value ? new Date(value) : new Date();
+  if(Number.isNaN(base.getTime())) return null;
+  const d = new Date(base.getTime());
+  d.setMonth(d.getMonth()+Number(months||0));
+  return d;
+}
+
+function singleBalanceExpiryHtml(data){
+  const d = data || {};
+  const balance = Number(d.balance||0);
+  const expiry = d.expires_at || null;
+  const days = d.days_remaining !== null && d.days_remaining !== undefined
+    ? Number(d.days_remaining)
+    : expiryDays(expiry);
+
+  if(balance<=0){
+    return `
+      <div class="single-expiry-card empty">
+        <div class="expiry-label">Masa Aktif Saldo</div>
+        <div class="expiry-main">Belum ada saldo aktif</div>
+        <div class="expiry-note">Top up hanya dapat dilakukan melalui kasir CACAYO.</div>
+      </div>`;
+  }
+
+  if(!expiry){
+    return `
+      <div class="single-expiry-card">
+        <div class="expiry-label">Masa Aktif Total Saldo</div>
+        <div class="expiry-main">Tanpa tanggal expired</div>
+        <div class="expiry-balance">${money(balance)}</div>
+        <div class="expiry-note">Jika melakukan top up paket, seluruh saldo akan mengikuti masa aktif paket tersebut.</div>
+      </div>`;
+  }
+
+  const urgent = days!==null && days<=30;
+  return `
+    <div class="single-expiry-card ${urgent ? "urgent" : ""}">
+      <div class="expiry-label">Total Saldo Berlaku Sampai</div>
+      <div class="expiry-main">${dateID(expiry)}</div>
+      <div class="expiry-balance">${money(balance)}</div>
+      <div class="expiry-note">${days===0 ? "Expired hari ini" : `${days} hari lagi`} • Setiap top up akan memperpanjang tanggal ini.</div>
+    </div>`;
+}
+
 async function renderMember(){
   const u=requireLogin(); if(!u) return;
   mountLayout(); setNav("kasir");
@@ -230,11 +294,22 @@ async function renderMember(){
 
     let historyRows = [];
     let historyError = "";
+    let expiryInfo = {};
+    let expiryError = "";
     try{
       historyRows = await rpc("s3_staff_member_history", {p_staff_session_token:u.session_token, p_member_id:m.member_id});
       historyRows = historyRows || [];
     }catch(e){
       historyError = e.message;
+    }
+    try{
+      const expiryRows = await rpc("s3_staff_member_balance_expiry", {
+        p_staff_session_token:u.session_token,
+        p_member_id:m.member_id
+      });
+      expiryInfo = expiryRows&&expiryRows[0] ? expiryRows[0] : {};
+    }catch(e){
+      expiryError = e.message;
     }
 
     const isBlocked = String(m.status || "").toLowerCase() === "blocked";
@@ -272,6 +347,11 @@ async function renderMember(){
         <h3>Detail</h3>
         <div class="item"><div class="title">HP</div><div class="meta">${esc(m.phone)}</div></div>
         <div class="item"><div class="title">Member ID</div><div class="meta">${esc(m.member_code)}</div></div>
+      </section>
+      <section class="card">
+        <h2>Masa Aktif Saldo</h2>
+        <p>Seluruh saldo member menggunakan satu tanggal expired.</p>
+        ${expiryError ? `<div class="error">${esc(expiryError)}</div>` : singleBalanceExpiryHtml(expiryInfo)}
       </section>
       <section class="card">
         <h2>Riwayat Transaksi Customer</h2>
@@ -396,11 +476,29 @@ async function renderTopup(){
     const member=await fetchMemberByPhone(phone);
     if(!member){ setHash("kasir"); return; }
 
+    let currentExpiryInfo = {};
+    try{
+      const expiryRows = await rpc("s3_staff_member_balance_expiry", {
+        p_staff_session_token:user.session_token,
+        p_member_id:member.member_id
+      });
+      currentExpiryInfo = expiryRows&&expiryRows[0] ? expiryRows[0] : {};
+      if(currentExpiryInfo.balance !== undefined){
+        member.balance = Number(currentExpiryInfo.balance||0);
+      }
+    }catch(e){
+      currentExpiryInfo = {};
+    }
+
     screen(`
       <section class="card">
         <h1>Top Up Saldo Member</h1>
         <p>Kasir menerima pembayaran di POS, lalu input invoice POS dan saldo yang diberikan ke member.</p>
         <div class="kpi"><div class="label">${esc(member.name)} • ${esc(member.phone)}</div><div class="value">${money(member.balance)}</div></div>
+        <div class="topup-expiry-current">
+          Masa aktif saldo saat ini:
+          <b>${currentExpiryInfo.expires_at ? dateID(currentExpiryInfo.expires_at) : (Number(member.balance||0)>0 ? "Tanpa tanggal expired" : "Belum ada saldo aktif")}</b>
+        </div>
       </section>
 
       <section class="card">
@@ -436,11 +534,11 @@ async function renderTopup(){
           <div class="grid two">
             <div>
               <label>Uang Diterima Kasir</label>
-              <input id="cashPaid" inputmode="numeric" value="1000000" />
+              <input id="cashPaid" inputmode="numeric" value="1000000" readonly />
             </div>
             <div>
               <label>Saldo yang Diberikan</label>
-              <input id="creditIssued" inputmode="numeric" value="1050000" />
+              <input id="creditIssued" inputmode="numeric" value="1050000" readonly />
             </div>
           </div>
           <label>Invoice Number dari POS</label>
@@ -457,7 +555,18 @@ async function renderTopup(){
 
     function refreshPreview(){
       const paid=parseMoney(byId("cashPaid").value), credit=parseMoney(byId("creditIssued").value);
-      byId("topup-preview").innerHTML=`Paket: <b>${selectedPackage}</b> • Valid <b>${selectedValidMonths} bulan</b><br>Customer bayar <b>${money(paid)}</b>, saldo member bertambah <b>${money(credit)}</b>.<br>Saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b>.`;
+      const hasActiveBalance = Number(member.balance||0)>0;
+      const currentExpiry = currentExpiryInfo.expires_at && new Date(currentExpiryInfo.expires_at)>new Date()
+        ? currentExpiryInfo.expires_at
+        : null;
+      const expiryBase = hasActiveBalance && currentExpiry ? currentExpiry : new Date();
+      const estimatedExpiry = addMonthsFrom(expiryBase, selectedValidMonths);
+      byId("topup-preview").innerHTML=`
+        Paket: <b>${selectedPackage}</b> • Perpanjangan <b>+${selectedValidMonths} bulan</b><br>
+        Customer bayar <b>${money(paid)}</b>, saldo bertambah <b>${money(credit)}</b>.<br>
+        Total saldo setelah top up: <b>${money(Number(member.balance||0)+credit)}</b><br>
+        Tanggal expired seluruh saldo: <b>${dateID(estimatedExpiry)}</b>
+      `;
     }
 
     document.querySelectorAll(".simple-topup-card").forEach(btn=>{
@@ -472,8 +581,6 @@ async function renderTopup(){
       };
     });
 
-    byId("cashPaid").oninput=refreshPreview;
-    byId("creditIssued").oninput=refreshPreview;
     refreshPreview();
 
     byId("topup-form").onsubmit=async(e)=>{
@@ -493,7 +600,7 @@ async function renderTopup(){
 
       box.innerHTML=`<div class="notice">Submitting top up...</div>`;
       try{
-        const newBalance=await rpc("s3_topup_member",{
+        const rows=await rpc("s3_topup_member",{
           p_staff_session_token:user.session_token,
           p_member_id:member.member_id,
           p_cash_paid:paid,
@@ -502,7 +609,8 @@ async function renderTopup(){
           p_package_name:selectedPackage,
           p_valid_months:selectedValidMonths
         });
-        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Paket: <b>${selectedPackage}</b> • Valid ${selectedValidMonths} bulan<br>Invoice POS: <b>${invoiceNumber}</b><br>Saldo baru member: <b>${money(newBalance)}</b>.</div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${esc(member.phone)}'})">Lihat Member</button></div>`;
+        const d=rows&&rows[0]?rows[0]:{};
+        box.innerHTML=`<div class="success"><b>Top Up Sukses ✅</b><br>Paket: <b>${esc(d.package_name||selectedPackage)}</b><br>Saldo ditambahkan: <b>${money(d.credit_issued||credit)}</b><br>Total saldo aktif: <b>${money(d.new_balance||0)}</b><br>Seluruh saldo berlaku sampai: <b>${dateID(d.expires_at)}</b><br>Invoice POS: <b>${esc(invoiceNumber)}</b></div><div class="grid two" style="margin-top:12px"><button onclick="setHash('kasir')">Kembali ke Kasir</button><button class="secondary" onclick="setHash('member',{phone:'${esc(member.phone)}'})">Lihat Member</button></div>`;
       }catch(err){
         box.innerHTML=`<div class="error">${safeError(err)}</div>`;
       }
@@ -1155,6 +1263,8 @@ async function renderCustomerPortal(){
     const c=homeRows[0];
 
     const historyRows=await rpc("mvp_customer_history",{p_session_token:session.session_token});
+    const expiryRows=await rpc("mvp_customer_balance_expiry",{p_session_token:session.session_token});
+    const expiryInfo=expiryRows&&expiryRows[0]?expiryRows[0]:{};
 
     target.innerHTML=`
       <section class="card">
@@ -1167,6 +1277,11 @@ async function renderCustomerPortal(){
         <div class="item"><div class="title">Member ID</div><div class="meta">${esc(c.member_code || "-")}</div></div>
         <div class="notice" style="margin-top:12px">Top up hanya bisa dilakukan di kasir CACAYO. Website ini hanya untuk cek saldo dan riwayat transaksi.</div>
         <button class="ghost full" style="margin-top:12px" id="customer-logout-btn">Logout</button>
+      </section>
+      <section class="card">
+        <h2>Masa Aktif Saldo</h2>
+        <p>Seluruh saldo menggunakan satu tanggal expired. Top up baru akan memperpanjang masa aktif saldo.</p>
+        ${singleBalanceExpiryHtml(expiryInfo)}
       </section>
       <section class="card">
         <h2>Riwayat Transaksi</h2>

@@ -27,3 +27,16 @@
 - Added Cloudflare exact rewrites for the staff directory.
 - Added cache-busting query strings to staff assets.
 - No SQL migration is required for this UI-only patch.
+
+
+## v3.1.1 Single Balance Expiry
+- Replaces the un-deployed v3.1.0 balance-batch model.
+- Each member now has one wallet balance and one expiry date.
+- Top-up extends the current future expiry:
+  - NICKEL/SILVER: +2 months
+  - GOLD/DIAMOND: +4 months
+- Example: 2 weeks remaining + NICKEL = 2 months + 2 weeks remaining.
+- If balance is empty or already expired, validity starts from the top-up date.
+- Customer Portal and staff member detail show the same single expiry date.
+- Top-up amounts and package validity are server-controlled and read-only in UI.
+- Required SQL: `cash-to-dine-v311-single-balance-expiry.sql`.
