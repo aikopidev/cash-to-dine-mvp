@@ -339,3 +339,13 @@ Member Directory:
 - Customer approval wrong PIN also returns structured response instead of exception, so the counter persists.
 - Wrong attempts now correctly show: 9, 8, 7, ... and block at 10.
 - App updated to display structured PIN error responses.
+
+
+## v3.0.2 Staff Blank Screen Fix
+- Staff portal assets are now self-contained inside `/ops-cacayo-7k2/`.
+- Removed parent-relative `../app.js`, `../styles.css`, and `../qr-local.js` dependencies.
+- Portal mode is loaded from an external bootstrap file.
+- Added visible loading and fatal-error fallback instead of a blank page.
+- Added Cloudflare exact rewrites for the staff directory.
+- Added cache-busting query strings to staff assets.
+- No SQL migration is required for this UI-only patch.

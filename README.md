@@ -326,3 +326,24 @@ Member Directory:
 - Customer approval wrong PIN also returns structured response instead of exception, so the counter persists.
 - Wrong attempts now correctly show: 9, 8, 7, ... and block at 10.
 - App updated to display structured PIN error responses.
+
+
+## v3.0 Security Foundation
+- Separate customer and staff URLs
+- Bcrypt credential migration
+- Server-validated staff sessions
+- Legacy staff RPCs revoked from anon
+- Local QR generation
+- Hashed approval/reset/session tokens
+- Expiry, audit log, invoice idempotency
+- Security headers and noindex staff portal
+
+
+## v3.0.2 Staff Blank Screen Fix
+- Staff portal assets are now self-contained inside `/ops-cacayo-7k2/`.
+- Removed parent-relative `../app.js`, `../styles.css`, and `../qr-local.js` dependencies.
+- Portal mode is loaded from an external bootstrap file.
+- Added visible loading and fatal-error fallback instead of a blank page.
+- Added Cloudflare exact rewrites for the staff directory.
+- Added cache-busting query strings to staff assets.
+- No SQL migration is required for this UI-only patch.
