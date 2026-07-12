@@ -1,10 +1,11 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "2.3.0";
+const APP_VERSION = "2.4.0";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
 const OUTLET_SLUG = "cacayo";
 const SAFE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
 const SESSION_KEY = "ctd_v06_session";
+const CUSTOMER_SESSION_KEY = "ctd_customer_session_v24";
 const SUPABASE_URL = "https://xkxbmiwnufyfacviquza.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhreGJtaXdudWZ5ZmFjdmlxdXphIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM2MzU5NDUsImV4cCI6MjA5OTIxMTk0NX0.GoABCsKHjeutb144Ora6Wob-_M7DfeHoRB-Dmiunag8";
 
@@ -22,6 +23,13 @@ function saveSession(u){ localStorage.setItem(SESSION_KEY, JSON.stringify(u)); }
 function getSession(){ try{return JSON.parse(localStorage.getItem(SESSION_KEY)||"null");}catch(e){return null;} }
 function clearSession(){ localStorage.removeItem(SESSION_KEY); }
 function currentUser(){ return getSession(); }
+
+function saveCustomerSession(u){ localStorage.setItem(CUSTOMER_SESSION_KEY, JSON.stringify(u)); }
+function getCustomerSession(){ try{return JSON.parse(localStorage.getItem(CUSTOMER_SESSION_KEY)||"null");}catch(e){return null;} }
+function clearCustomerSession(){ localStorage.removeItem(CUSTOMER_SESSION_KEY); }
+function customerBlockedMessage(){
+  return "Anda telah salah memasukkan PIN sebanyak 10 kali. Akun dan penggunaan saldo Anda sementara diblokir untuk keamanan. Silakan datang ke cabang Cacayo terdekat untuk melakukan reset PIN melalui kasir. Saldo Anda tetap aman.";
+}
 function setHash(name, params={}){ const q=new URLSearchParams(params).toString(); location.hash = q ? `${name}?${q}` : name; }
 function getRoute(){ const raw=location.hash.replace(/^#/,"") || "login"; const [name,q=""] = raw.split("?"); return {name, params:Object.fromEntries(new URLSearchParams(q))}; }
 function requireLogin(){ const u=currentUser(); if(!u){ renderLogin(); return false; } return u; }
@@ -54,7 +62,7 @@ function setNav(active){
 }
 
 function renderLogin(){
-  byId("app").innerHTML = `<div class="login-wrap"><section class="login-card"><div class="logo-mark">CTD</div><h1>Cash to Dine</h1><p>Supabase Connected MVP. Data gift code, member, saldo, dan approval tersimpan di cloud.</p><div class="notice">Demo login: <b>owner / owner123</b> atau <b>kasir / kasir123</b></div><form id="login-form"><label>Username</label><input id="username" autocomplete="username" placeholder="owner atau kasir"/><label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"/><button class="full" style="margin-top:14px">Login</button></form><div id="login-result" style="margin-top:12px"></div><div class="divider"></div><button class="secondary full" onclick="setHash('join')">Customer Join Page</button></section></div>`;
+  byId("app").innerHTML = `<div class="login-wrap"><section class="login-card">${brandMiniHtml()}<div class="logo-mark">CTD</div><h1>Cash to Dine</h1><p>Staff login untuk owner/kasir. Customer gunakan Customer Portal untuk cek saldo dan riwayat transaksi.</p><div class="notice">Demo staff: <b>owner / owner123</b> atau <b>kasir / kasir123</b></div><form id="login-form"><label>Username Staff</label><input id="username" autocomplete="username" placeholder="owner atau kasir"/><label>Password Staff</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"/><button class="full" style="margin-top:14px">Login Staff</button></form><div id="login-result" style="margin-top:12px"></div><div class="divider"></div><button class="secondary full" onclick="setHash('customer-login')">Customer Portal</button><button class="ghost full" style="margin-top:8px" onclick="setHash('join')">Daftar Member Baru</button></section></div>`;
   byId("login-form").onsubmit = async (e)=>{ e.preventDefault(); const box=byId("login-result"); box.innerHTML=`<div class="notice">Logging in...</div>`; try{ const rows=await rpc("mvp_staff_login",{p_username:byId("username").value.trim(), p_password:byId("password").value}); if(!rows||!rows.length) throw new Error("Login salah."); saveSession(rows[0]); setHash(rows[0].role==="owner"?"owner":"kasir"); }catch(err){ box.innerHTML=`<div class="error">${err.message}</div>`; } };
 }
 
@@ -152,6 +160,37 @@ async function renderKasir(){
   liveBox.innerHTML = `<div class="notice">Ketik nomor HP customer untuk mulai search.</div>`;
 }
 async function fetchMemberByPhone(phone){ const u=currentUser(); const rows=await rpc("mvp_search_member",{p_staff_id:u.id, p_phone:normalizePhone(phone)}); return rows&&rows.length?rows[0]:null; }
+
+function historyListHtml(rows, emptyText="Belum ada transaksi."){
+  if(!rows || !rows.length){
+    return `<div class="notice">${emptyText}</div>`;
+  }
+  return `<div class="history-list">${rows.map(t=>{
+    const topup = Number(t.topup_amount || 0);
+    const used = Number(t.balance_used || 0);
+    const after = Number(t.balance_after || 0);
+    const title = t.type === "use_balance"
+      ? "Pakai Saldo"
+      : (t.type === "topup" ? "Top Up di Kasir" : (t.type === "gift_claim" ? "Voucher Awal" : "Transaksi"));
+    return `
+      <div class="history-item">
+        <div class="history-head">
+          <div>
+            <div class="title">${title}</div>
+            <div class="meta">${new Date(t.created_at).toLocaleString("id-ID")} • ${t.outlet_name || OUTLET}</div>
+          </div>
+          <span class="badge ${t.transaction_status === "approved" ? "ok" : ""}">${t.transaction_status || "approved"}</span>
+        </div>
+        <div class="history-grid">
+          <div><span>Top Up</span><b>${topup ? money(topup) : "-"}</b></div>
+          <div><span>Pakai Saldo</span><b>${used ? money(used) : "-"}</b></div>
+          <div><span>Saldo Setelah</span><b>${money(after)}</b></div>
+        </div>
+      </div>
+    `;
+  }).join("")}</div>`;
+}
+
 async function renderMember(){
   const u=requireLogin(); if(!u) return;
   mountLayout(); setNav("kasir");
@@ -166,14 +205,30 @@ async function renderMember(){
       return;
     }
 
-    const ownerControls = u.role === "owner" ? `
+    let historyRows = [];
+    let historyError = "";
+    try{
+      historyRows = await rpc("mvp_staff_member_history", {p_staff_id:u.id, p_member_id:m.member_id});
+      historyRows = historyRows || [];
+    }catch(e){
+      historyError = e.message;
+    }
+
+    const isBlocked = String(m.status || "").toLowerCase() === "blocked";
+    const resetControls = `
+      <section class="card">
+        <h2>Reset PIN</h2>
+        <p>Reset PIN hanya dilakukan melalui staff di cabang CACAYO. Customer scan QR dan membuat PIN baru sendiri.</p>
+        <button class="secondary full" id="reset-pin-btn">Reset PIN via QR</button>
+        <div id="staff-action-result" style="margin-top:12px"></div>
+      </section>
+    `;
+
+    const ownerDelete = u.role === "owner" ? `
       <section class="card">
         <h2>Owner Controls</h2>
-        <p>Hanya owner yang bisa reset PIN dan delete member. Kasir tidak punya akses.</p>
-        <div class="grid two">
-          <button class="secondary" id="reset-pin-btn">Reset PIN via QR</button>
-          <button class="danger" id="delete-member-btn">Delete Member</button>
-        </div>
+        <p>Delete member hanya untuk owner.</p>
+        <button class="danger full" id="delete-member-btn">Delete Member</button>
         <div id="owner-action-result" style="margin-top:12px"></div>
       </section>
     ` : "";
@@ -181,51 +236,58 @@ async function renderMember(){
     screen(`
       <section class="card">
         <h1>${m.name}</h1>
-        <div class="row"><span class="badge ok">${m.status.toUpperCase()}</span><span class="badge">${m.member_code}</span></div>
+        <div class="row"><span class="badge ${isBlocked ? "" : "ok"}">${String(m.status||"active").toUpperCase()}</span><span class="badge">${m.member_code}</span></div>
         <div class="divider"></div>
         <div class="kpi"><div class="label">Saldo Dining</div><div class="value">${money(m.balance)}</div></div>
+        ${isBlocked ? `<div class="error" style="margin-top:12px">${customerBlockedMessage()}</div>` : `
         <div class="grid two" style="margin-top:12px">
           <button onclick="setHash('topup',{phone:'${m.phone}'})">Top Up Saldo</button>
           <button class="secondary" onclick="setHash('use-balance',{phone:'${m.phone}'})">Gunakan Saldo</button>
-        </div>
+        </div>`}
       </section>
       <section class="card">
         <h3>Detail</h3>
         <div class="item"><div class="title">HP</div><div class="meta">${m.phone}</div></div>
         <div class="item"><div class="title">Member ID</div><div class="meta">${m.member_code}</div></div>
       </section>
-      ${ownerControls}
+      <section class="card">
+        <h2>Riwayat Transaksi Customer</h2>
+        <p>Kasir dan owner bisa melihat history saldo customer. Detail pembayaran POS tidak dicatat di CTD.</p>
+        ${historyError ? `<div class="error">${historyError}</div>` : historyListHtml(historyRows)}
+      </section>
+      ${resetControls}
+      ${ownerDelete}
     `);
 
-    if(u.role === "owner"){
-      byId("reset-pin-btn").onclick = async ()=>{
-        const box = byId("owner-action-result");
-        box.innerHTML = `<div class="notice">Membuat QR reset PIN...</div>`;
-        try{
-          const token = "PIN" + randomCode(20);
-          const rows = await rpc("mvp_create_pin_reset_request", {
-            p_staff_id: u.id,
-            p_member_id: m.member_id,
-            p_token: token
-          });
-          const d = rows && rows[0] ? rows[0] : {};
-          const resetToken = d.token || token;
-          const link = `${publicBaseUrl()}#reset-pin?token=${resetToken}`;
-          box.innerHTML = `
-            <div class="success"><b>QR Reset PIN siap ✅</b><br>Customer scan QR ini untuk buat PIN baru.</div>
-            <div class="qr-wrap">
-              <img class="qr-img" src="${qrImageUrl(link)}" alt="QR Reset PIN"/>
-              <div class="meta">Berlaku sampai: ${d.expires_at || "30 menit"}</div>
-            </div>
-            <label>Reset PIN Link</label>
-            <textarea class="copy-area" readonly>${link}</textarea>
-            <button class="secondary full" onclick="navigator.clipboard.writeText('${link}').then(()=>alert('Reset PIN link copied'))">Copy Reset Link</button>
-          `;
-        }catch(err){
-          box.innerHTML = `<div class="error">${err.message}</div>`;
-        }
-      };
+    byId("reset-pin-btn").onclick = async ()=>{
+      const box = byId("staff-action-result");
+      box.innerHTML = `<div class="notice">Membuat QR reset PIN...</div>`;
+      try{
+        const token = "PIN" + randomCode(20);
+        const rows = await rpc("mvp_create_pin_reset_request", {
+          p_staff_id: u.id,
+          p_member_id: m.member_id,
+          p_token: token
+        });
+        const d = rows && rows[0] ? rows[0] : {};
+        const resetToken = d.token || token;
+        const link = `${publicBaseUrl()}#reset-pin?token=${resetToken}`;
+        box.innerHTML = `
+          <div class="success"><b>QR Reset PIN siap ✅</b><br>Customer scan QR ini untuk buat PIN baru. Setelah PIN baru dibuat, akun yang terblokir akan aktif kembali.</div>
+          <div class="qr-wrap">
+            <img class="qr-img" src="${qrImageUrl(link)}" alt="QR Reset PIN"/>
+            <div class="meta">Berlaku sampai: ${d.expires_at || "30 menit"}</div>
+          </div>
+          <label>Reset PIN Link</label>
+          <textarea class="copy-area" readonly>${link}</textarea>
+          <button class="secondary full" onclick="navigator.clipboard.writeText('${link}').then(()=>alert('Reset PIN link copied'))">Copy Reset Link</button>
+        `;
+      }catch(err){
+        box.innerHTML = `<div class="error">${err.message}</div>`;
+      }
+    };
 
+    if(u.role === "owner"){
       byId("delete-member-btn").onclick = async ()=>{
         const ok = confirm(`Delete member ${m.name} (${m.phone})?\n\nMember akan dihapus dari search/list dan saldo akan di-set Rp0. Aksi ini hanya untuk owner.`);
         if(!ok) return;
@@ -298,7 +360,7 @@ function renderJoin(){
       });
       const d=rows&&rows[0]?rows[0]:{};
       const giftStatus = giftCode ? "TERDAFTAR" : "TANPA GIFT CODE";
-      box.innerHTML=`<div class="success"><b>Membership Active ✅</b><br>Member ID: ${d.member_code||memberCode}<br>Saldo Awal: ${money(d.initial_balance||0)}<br>Gift Code: ${giftStatus}<br><br><b>MOHON PIN DI INGAT / DI SCREENSHOT.</b></div><button class="full" style="margin-top:10px" onclick="setHash('login')">Selesai</button>`;
+      box.innerHTML=`<div class="success"><b>Membership Active ✅</b><br>Member ID: ${d.member_code||memberCode}<br>Saldo Awal: ${money(d.initial_balance||0)}<br>Gift Code: ${giftStatus}<br><br><b>MOHON PIN DI INGAT / DI SCREENSHOT.</b></div><button class="full" style="margin-top:10px" onclick="setHash('customer-login')">Login Customer Portal</button><button class="ghost full" style="margin-top:8px" onclick="setHash('login')">Selesai</button>`;
     }catch(err){
       box.innerHTML=`<div class="error">${err.message}</div>`;
     }
@@ -988,6 +1050,110 @@ async function renderMembers(){
   await loadMembers();
 }
 
+function requireCustomerSession(){
+  const s=getCustomerSession();
+  if(!s || !s.session_token){
+    renderCustomerLogin();
+    return false;
+  }
+  return s;
+}
+
+function renderCustomerLogin(){
+  clearSession();
+  byId("app").innerHTML=`<main style="padding:16px;max-width:560px;margin:auto"></main>`;
+  const target=document.querySelector("main");
+  target.innerHTML=`
+    <section class="card">
+      ${brandMiniHtml()}
+      <h1>Customer Portal</h1>
+      <p>Login menggunakan nomor WhatsApp dan PIN untuk melihat saldo serta riwayat transaksi.</p>
+      <form id="customer-login-form">
+        <label>Nomor WhatsApp</label>
+        <input id="customer-phone" inputmode="numeric" placeholder="628xxxxxxxxxx" autocomplete="tel" required/>
+        <label>PIN 6 Digit</label>
+        <input id="customer-pin" type="password" inputmode="numeric" maxlength="6" placeholder="Masukkan PIN" required/>
+        <button class="full" style="margin-top:14px">Login Customer</button>
+      </form>
+      <div id="customer-login-result" style="margin-top:12px"></div>
+      <div class="divider"></div>
+      <button class="ghost full" onclick="setHash('join')">Daftar Member Baru</button>
+      <button class="ghost full" style="margin-top:8px" onclick="setHash('login')">Staff Login</button>
+    </section>
+  `;
+
+  byId("customer-login-form").onsubmit = async(e)=>{
+    e.preventDefault();
+    const box=byId("customer-login-result");
+    const phone=normalizePhone(byId("customer-phone").value);
+    const pin=byId("customer-pin").value.trim();
+
+    if(!/^[0-9]{6}$/.test(pin)){
+      box.innerHTML=`<div class="error">PIN wajib 6 digit angka.</div>`;
+      return;
+    }
+
+    box.innerHTML=`<div class="notice">Login customer...</div>`;
+    try{
+      const rows=await rpc("mvp_customer_login",{
+        p_outlet_slug:OUTLET_SLUG,
+        p_phone:phone,
+        p_pin:pin
+      });
+      if(!rows||!rows.length) throw new Error("Login customer gagal.");
+      saveCustomerSession(rows[0]);
+      setHash("customer-portal");
+    }catch(err){
+      box.innerHTML=`<div class="error">${err.message}</div>`;
+    }
+  };
+}
+
+async function renderCustomerPortal(){
+  const session=requireCustomerSession(); if(!session)return;
+  clearSession();
+  byId("app").innerHTML=`<main style="padding:16px;max-width:680px;margin:auto"></main>`;
+  const target=document.querySelector("main");
+  target.innerHTML=`<section class="card">${brandMiniHtml()}<h1>Loading Customer Portal...</h1></section>`;
+
+  try{
+    const homeRows=await rpc("mvp_customer_home",{p_session_token:session.session_token});
+    if(!homeRows||!homeRows.length) throw new Error("Session customer tidak valid. Silakan login ulang.");
+    const c=homeRows[0];
+
+    const historyRows=await rpc("mvp_customer_history",{p_session_token:session.session_token});
+
+    target.innerHTML=`
+      <section class="card">
+        ${brandMiniHtml()}
+        <div class="customer-home-header">
+          <h1>Customer Portal</h1>
+          <p>${c.name || "Member"} • ${c.phone || ""}</p>
+        </div>
+        <div class="kpi"><div class="label">Saldo Saat Ini</div><div class="value">${money(c.balance || 0)}</div></div>
+        <div class="item"><div class="title">Member ID</div><div class="meta">${c.member_code || "-"}</div></div>
+        <div class="notice" style="margin-top:12px">Top up hanya bisa dilakukan di kasir CACAYO. Website ini hanya untuk cek saldo dan riwayat transaksi.</div>
+        <button class="ghost full" style="margin-top:12px" id="customer-logout-btn">Logout</button>
+      </section>
+      <section class="card">
+        <h2>Riwayat Transaksi</h2>
+        <p>Detail pembayaran seperti QRIS, tunai, kartu, atau sisa pembayaran tetap dicatat di POS, bukan di CTD.</p>
+        ${historyListHtml(historyRows || [])}
+      </section>
+    `;
+
+    byId("customer-logout-btn").onclick = async()=>{
+      try{ await rpc("mvp_customer_logout",{p_session_token:session.session_token}); }catch(e){}
+      clearCustomerSession();
+      setHash("customer-login");
+    };
+  }catch(err){
+    clearCustomerSession();
+    target.innerHTML=`<section class="card">${brandMiniHtml()}<h1>Customer Portal</h1><div class="error">${err.message}</div><button class="full" style="margin-top:12px" onclick="setHash('customer-login')">Login Ulang</button></section>`;
+  }
+}
+
+
 async function renderReport(){
   const u=requireLogin(); if(!u)return; mountLayout(); setNav("report"); screen(`<section class="card"><h1>Loading report...</h1></section>`); try{ const rows=await rpc("mvp_recent_transactions",{p_staff_id:u.id}); screen(`<section class="card"><h1>Transaction Report</h1><div class="list">${rows&&rows.length?rows.map(t=>`<div class="item"><div class="title">${t.type} • ${money(t.balance_used||t.credit_issued||0)}</div><div class="meta">${t.member_name||"-"} • ${t.member_phone||"-"} • ${new Date(t.created_at).toLocaleString("id-ID")}</div><div class="meta">Status: ${t.status}</div></div>`).join(""):`<p>Belum ada transaksi.</p>`}</div></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${err.message}</div></section>`); }
 }
@@ -1107,7 +1273,7 @@ async function renderCustomerResetHome(){
   }
 }
 
-function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="customer-home")return renderCustomerHome(); if(name==="customer-reset-home")return renderCustomerResetHome(); if(name==="reset-pin")return renderResetPin(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="members")return renderMembers(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
+function route(){ const {name}=getRoute(); if(name==="login")return renderLogin(); if(name==="customer-login")return renderCustomerLogin(); if(name==="customer-portal")return renderCustomerPortal(); if(name==="kasir")return renderKasir(); if(name==="member")return renderMember(); if(name==="register"||name==="join")return renderJoin(); if(name==="topup")return renderTopup(); if(name==="use-balance")return renderUseBalance(); if(name==="waiting")return renderWaiting(); if(name==="approve")return renderApprove(); if(name==="customer-home")return renderCustomerHome(); if(name==="customer-reset-home")return renderCustomerResetHome(); if(name==="reset-pin")return renderResetPin(); if(name==="success")return renderSuccess(); if(name==="owner")return renderOwner(); if(name==="members")return renderMembers(); if(name==="gift-generate")return renderGiftGenerate(); if(name==="report")return renderReport(); setHash("login"); }
 window.addEventListener("hashchange", route);
 window.addEventListener("load", route);
 

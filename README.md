@@ -287,3 +287,27 @@ Member Directory:
 - Meta description added:
   `Top up saldo makan, nikmati bonus dining credit, dan pakai saldo langsung di CACAYO.`
 - No SQL change required.
+
+
+## Update v2.4 Customer Portal + Transaction History
+- Customer web portal added:
+  - Login with WhatsApp number + 6 digit PIN
+  - View current balance
+  - View transaction history
+  - Logout
+- No customer top up from website. Top up remains cashier-only.
+- No email.
+- Customer history shows:
+  - Transaction date
+  - Outlet / branch name
+  - Top up amount
+  - Balance used
+  - Balance after transaction
+- Staff member detail now shows customer transaction history for cashier and owner.
+- PIN security:
+  - Failed PIN attempts are counted.
+  - After 10 failed PIN attempts, member status becomes blocked.
+  - Blocked customer cannot login or approve balance usage.
+  - Block message tells customer to visit CACAYO branch for staff reset and that balance remains safe.
+- Reset PIN through staff QR clears failed attempts and unblocks member.
+- SQL patch required: `cash-to-dine-v24-patch-customer-portal-history.sql`
