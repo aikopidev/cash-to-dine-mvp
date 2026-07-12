@@ -311,3 +311,10 @@ Member Directory:
   - Block message tells customer to visit CACAYO branch for staff reset and that balance remains safe.
 - Reset PIN through staff QR clears failed attempts and unblocks member.
 - SQL patch required: `cash-to-dine-v24-patch-customer-portal-history.sql`
+
+
+## Update v2.4.2 Remove Demo Credentials + Fix PIN Counter
+- Removed demo username/password notice from staff login page.
+- SQL patch fixes failed PIN counter by incrementing attempts directly in database with `UPDATE ... RETURNING`.
+- Wrong PIN messages now decrement correctly: 9, 8, 7, ... until blocked at 10 attempts.
+- Customer login and customer approval PIN share the same counter.

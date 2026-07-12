@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "2.4.0";
+const APP_VERSION = "2.4.2";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
 const OUTLET_SLUG = "cacayo";
@@ -62,7 +62,7 @@ function setNav(active){
 }
 
 function renderLogin(){
-  byId("app").innerHTML = `<div class="login-wrap"><section class="login-card">${brandMiniHtml()}<div class="logo-mark">CTD</div><h1>Cash to Dine</h1><p>Staff login untuk owner/kasir. Customer gunakan Customer Portal untuk cek saldo dan riwayat transaksi.</p><div class="notice">Demo staff: <b>owner / owner123</b> atau <b>kasir / kasir123</b></div><form id="login-form"><label>Username Staff</label><input id="username" autocomplete="username" placeholder="owner atau kasir"/><label>Password Staff</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"/><button class="full" style="margin-top:14px">Login Staff</button></form><div id="login-result" style="margin-top:12px"></div><div class="divider"></div><button class="secondary full" onclick="setHash('customer-login')">Customer Portal</button><button class="ghost full" style="margin-top:8px" onclick="setHash('join')">Daftar Member Baru</button></section></div>`;
+  byId("app").innerHTML = `<div class="login-wrap"><section class="login-card">${brandMiniHtml()}<div class="logo-mark">CTD</div><h1>Cash to Dine</h1><p>Staff login untuk owner/kasir. Customer gunakan Customer Portal untuk cek saldo dan riwayat transaksi.</p><form id="login-form"><label>Username Staff</label><input id="username" autocomplete="username" placeholder="owner atau kasir"/><label>Password Staff</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"/><button class="full" style="margin-top:14px">Login Staff</button></form><div id="login-result" style="margin-top:12px"></div><div class="divider"></div><button class="secondary full" onclick="setHash('customer-login')">Customer Portal</button><button class="ghost full" style="margin-top:8px" onclick="setHash('join')">Daftar Member Baru</button></section></div>`;
   byId("login-form").onsubmit = async (e)=>{ e.preventDefault(); const box=byId("login-result"); box.innerHTML=`<div class="notice">Logging in...</div>`; try{ const rows=await rpc("mvp_staff_login",{p_username:byId("username").value.trim(), p_password:byId("password").value}); if(!rows||!rows.length) throw new Error("Login salah."); saveSession(rows[0]); setHash(rows[0].role==="owner"?"owner":"kasir"); }catch(err){ box.innerHTML=`<div class="error">${err.message}</div>`; } };
 }
 
