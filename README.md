@@ -318,3 +318,11 @@ Member Directory:
 - SQL patch fixes failed PIN counter by incrementing attempts directly in database with `UPDATE ... RETURNING`.
 - Wrong PIN messages now decrement correctly: 9, 8, 7, ... until blocked at 10 attempts.
 - Customer login and customer approval PIN share the same counter.
+
+
+## Update v2.4.3 Persistent PIN Counter Fix
+- Root cause fixed: failed PIN attempts were rolling back because SQL raised exception after updating the counter.
+- Customer login wrong PIN now returns structured response instead of exception, so the counter persists.
+- Customer approval wrong PIN also returns structured response instead of exception, so the counter persists.
+- Wrong attempts now correctly show: 9, 8, 7, ... and block at 10.
+- App updated to display structured PIN error responses.

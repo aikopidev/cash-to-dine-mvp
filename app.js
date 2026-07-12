@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "2.4.2";
+const APP_VERSION = "2.4.3";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
 const OUTLET_SLUG = "cacayo";
@@ -606,6 +606,10 @@ async function renderApprove(){
       try{
         const rows=await rpc("mvp_approve_balance_use",{p_token:token,p_password:byId("pass").value});
         const d=rows&&rows[0]?rows[0]:{};
+        if(d.approval_success === false){
+          box.innerHTML=`<div class="error">${d.error_message || "PIN salah."}</div>`;
+          return;
+        }
         const saldoAfter = d.balance_after ?? p.balance_after ?? 0;
 
         target.innerHTML=`
@@ -1101,7 +1105,12 @@ function renderCustomerLogin(){
         p_pin:pin
       });
       if(!rows||!rows.length) throw new Error("Login customer gagal.");
-      saveCustomerSession(rows[0]);
+      const d=rows[0];
+      if(d.login_success === false){
+        box.innerHTML=`<div class="error">${d.error_message || "PIN salah."}</div>`;
+        return;
+      }
+      saveCustomerSession(d);
       setHash("customer-portal");
     }catch(err){
       box.innerHTML=`<div class="error">${err.message}</div>`;
