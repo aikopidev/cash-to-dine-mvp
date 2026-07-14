@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "3.1.1";
+const APP_VERSION = "3.1.2";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -834,7 +834,7 @@ async function renderGiftGenerate(){
   screen(`
     <section class="card">
       <h1>Voucher Control Center</h1>
-      <p>Monitor voucher lama dan baru. 10 voucher per page. Voucher terdaftar/claimed akan terkunci. Voucher available bisa dicopy WA atau di-delete/void kalau belum dishare.</p>
+      <p>Monitor voucher lama dan baru. 10 voucher per page. Voucher terdaftar/claimed akan terkunci. Voucher available hanya bisa dicopy satu kali melalui WA atau Link. Setelah dicopy, voucher terkunci dan tidak bisa dicopy atau di-delete ulang.</p>
       <div id="voucher-summary" class="voucher-summary">
         <div class="stat"><div class="label">Total</div><div class="value">-</div></div>
         <div class="stat"><div class="label">Available</div><div class="value">-</div></div>
@@ -850,7 +850,7 @@ async function renderGiftGenerate(){
           <option value="expired">Expired</option>
           <option value="void">Deleted / Void</option>
         </select>
-        <button class="secondary" id="copy-page-wa" type="button">Copy WA Page Ini</button>
+        <span class="badge">Copy hanya 1x per voucher</span>
         <button class="ghost" id="refresh-vouchers" type="button">Refresh</button>
       </div>
       <div id="voucher-list" class="list"><div class="notice">Loading voucher list...</div></div>
@@ -947,18 +947,27 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
       const isAvailable = v.voucher_status === "available";
       const isRegistered = v.voucher_status === "registered" || v.voucher_status === "used";
       const isClaimed = v.voucher_status === "claimed";
+      const isCopied = Boolean(v.copied_at);
+      const copyMethod = String(v.copied_method || "").toUpperCase();
+
       const usedInfo = isRegistered
         ? `<div class="meta">Terdaftar oleh: ${esc(v.used_by_name || "-")} • ${esc(v.used_by_phone || "-")}</div>`
         : (isClaimed
           ? `<div class="meta">Claimed by: ${esc(v.used_by_name || "-")} • ${esc(v.used_by_phone || "-")}</div>`
-          : (isAvailable ? `<div class="meta">Link: ${joinBase}${v.code}</div>` : `<div class="meta">Status: ${v.voucher_status}</div>`));
+          : (isAvailable
+            ? (isCopied
+              ? `<div class="meta copied-meta">COPIED${copyMethod ? ` via ${esc(copyMethod)}` : ""} • ${new Date(v.copied_at).toLocaleString("id-ID")}</div>`
+              : `<div class="meta">Belum dicopy / belum dikirim</div>`)
+            : `<div class="meta">Status: ${esc(v.voucher_status)}</div>`));
 
       const actions = isAvailable
-        ? `<div class="voucher-actions">
-             <button class="secondary" type="button" onclick="window.copyVoucherWA('${v.code}', ${Number(v.value||0)})">Copy WA</button>
-             <button class="ghost" type="button" onclick="window.copyVoucherLink('${v.code}')">Copy Link</button>
-             <button class="danger" type="button" onclick="window.deleteVoucher('${v.gift_id}', '${v.code}')">Delete</button>
-           </div>`
+        ? (isCopied
+          ? `<div class="voucher-actions copied-actions"><span class="copied-badge">✓ COPIED</span></div>`
+          : `<div class="voucher-actions">
+               <button class="secondary" type="button" onclick="window.copyVoucherOnce('${v.gift_id}','wa',this)">Copy WA</button>
+               <button class="ghost" type="button" onclick="window.copyVoucherOnce('${v.gift_id}','link',this)">Copy Link</button>
+               <button class="danger" type="button" onclick="window.deleteVoucher('${v.gift_id}', '${v.code}')">Delete</button>
+             </div>`)
         : `<div class="voucher-actions"><span class="badge">${isRegistered ? "TERDAFTAR - jangan kirim ulang" : (isClaimed ? "CLAIMED" : "Not active")}</span></div>`;
 
       return `
@@ -1002,8 +1011,55 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
     }
   }
 
-  window.copyVoucherWA = async (code, value)=> copyText(waMessageFor(code, value), `WA invite ${code} copied.`);
-  window.copyVoucherLink = async (code)=> copyText(`${joinBase}${code}`, `Link ${code} copied.`);
+  async function copyWithFallback(text){
+    try{
+      await navigator.clipboard.writeText(text);
+      return true;
+    }catch(err){
+      window.prompt("Clipboard browser gagal. Copy teks berikut secara manual:", text);
+      return false;
+    }
+  }
+
+  window.copyVoucherOnce = async (giftId, method, button)=>{
+    if(!giftId || !["wa","link"].includes(method)) return;
+
+    const row = button ? button.closest(".voucher-row") : null;
+    const rowButtons = row ? Array.from(row.querySelectorAll("button")) : [];
+    rowButtons.forEach(btn=>btn.disabled=true);
+    if(button) button.textContent="COPYING...";
+
+    try{
+      const rows = await rpc("s3_copy_gift_code",{
+        p_staff_session_token:u.session_token,
+        p_gift_id:giftId,
+        p_method:method
+      });
+      const d=rows&&rows[0]?rows[0]:{};
+
+      if(d.copy_allowed===false){
+        alert(d.error_message||"Voucher sudah pernah dicopy.");
+        await loadVouchers();
+        return;
+      }
+
+      const text=method==="wa"
+        ? waMessageFor(d.code,d.value)
+        : `${joinBase}${d.code}`;
+
+      const copied=await copyWithFallback(text);
+      await loadVouchers();
+
+      if(copied){
+        alert(`${method==="wa"?"WA invite":"Link"} ${d.code} berhasil dicopy. Voucher sekarang terkunci.`);
+      }
+    }catch(err){
+      rowButtons.forEach(btn=>btn.disabled=false);
+      if(button) button.textContent=method==="wa"?"Copy WA":"Copy Link";
+      alert(safeError(err));
+    }
+  };
+
   window.deleteVoucher = async (giftId, code)=>{
     if(!confirm(`Delete / void voucher ${code}? Voucher yang sudah dihapus tidak bisa dipakai customer.`)) return;
     try{
@@ -1020,11 +1076,6 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
   byId("prev-page").onclick = ()=>{ if(currentPage>1){ currentPage--; loadVouchers(); } };
   byId("next-page").onclick = ()=>{ currentPage++; loadVouchers(); };
 
-  byId("copy-page-wa").onclick = async ()=>{
-    const rows = currentRows.filter(v=>v.voucher_status==="available");
-    if(!rows.length){ alert("Tidak ada voucher available di page ini."); return; }
-    await copyText(rows.map(v=>waMessageFor(v.code, v.value)).join("\n\n-------------------------\n\n"), `${rows.length} WA invite di page ini copied.`);
-  };
 
   byId("gift-form").onsubmit=async(e)=>{
     e.preventDefault();
@@ -1043,10 +1094,16 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
         p_qty:qty
       });
       const rows = created || [];
-      const wa=rows.map(r=>waMessageFor(r.code,value)).join("\n\n-------------------------\n\n");
-      const links=rows.map(r=>`${joinBase}${esc(r.code)}`).join("\n");
-      const csv=rows.map(r=>r.code).join("\n");
-      box.innerHTML=`<div class="success"><b>${rows.length} Gift Codes Generated ✅</b><br>Total Liability: ${money(rows.length*value)}<br>Kode 9 digit unik sudah masuk Supabase.</div><label>WA-ready Invite Messages Baru</label><textarea class="copy-area" id="waArea" readonly>${wa}</textarea><button class="secondary full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('waArea').value).then(()=>alert('WA messages copied'))">Copy WA Invite Baru</button><label>Registration Links Baru</label><textarea class="copy-area" id="linksArea" readonly>${links}</textarea><button class="secondary full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('linksArea').value).then(()=>alert('Links copied'))">Copy Links Baru</button><label>Codes Only Baru</label><textarea class="copy-area" id="codesArea" readonly>${csv}</textarea><button class="ghost full" type="button" onclick="navigator.clipboard.writeText(document.getElementById('codesArea').value).then(()=>alert('Codes copied'))">Copy Codes Only</button>`;
+      box.innerHTML=`
+        <div class="success">
+          <b>${rows.length} Gift Codes Generated ✅</b><br>
+          Total Liability: ${money(rows.length*value)}<br>
+          Voucher baru sudah masuk ke list <b>Available</b>.
+        </div>
+        <div class="notice" style="margin-top:10px">
+          Copy satu per satu melalui <b>Copy WA</b> atau <b>Copy Link</b>.
+          Setelah dicopy, voucher berubah menjadi <b>COPIED</b> dan terkunci.
+        </div>`;
       currentPage = 1;
       byId("voucher-filter").value = "available";
       await loadVouchers();
