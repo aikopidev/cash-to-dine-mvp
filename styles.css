@@ -943,112 +943,46 @@ input[readonly]{
 .voucher-actions button:disabled{cursor:not-allowed;opacity:.55}
 
 
-/* v3.2.0 Existing Member Gift */
-.section-eyebrow{
-  color:var(--muted);
-  font-size:11px;
-  font-weight:1000;
-  letter-spacing:.08em;
-  margin-bottom:5px;
+/* v3.2.1 Voucher / Generic Gift */
+.generate-code-card{border-top:5px solid #7c3aed}
+.type-help{margin:10px 0 14px}
+.voucher-type-card,.gift-type-card{
+  display:flex;flex-direction:column;gap:5px;padding:13px;
+  border-radius:14px;font-size:13px;line-height:1.45
 }
-.member-gift-card{
-  border-top:5px solid #7c3aed;
+.voucher-type-card{border:1px solid #93c5fd;background:#eff6ff}
+.gift-type-card{border:1px solid #c4b5fd;background:#f5f3ff}
+.voucher-type-card b,.gift-type-card b{font-size:14px}
+.code-type-pill{
+  display:inline-flex;align-items:center;border-radius:999px;
+  padding:4px 8px;margin-bottom:5px;font-size:10px;
+  font-weight:1000;letter-spacing:.04em
 }
-.member-gift-search-result{
-  display:grid;
-  gap:8px;
-  margin-top:8px;
-}
-.member-search-option{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  width:100%;
-  padding:12px;
-  border:1px solid var(--line);
-  border-radius:13px;
-  background:#fff;
-  color:#111827;
-  text-align:left;
-}
-.member-search-option span{
-  display:flex;
-  flex-direction:column;
-  gap:3px;
-}
-.member-search-option small{
-  color:var(--muted);
-}
-.selected-member-card{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  gap:12px;
-  margin:10px 0 14px;
-  padding:13px;
-  border:1px solid #c4b5fd;
-  border-radius:14px;
-  background:#f5f3ff;
-}
-.selected-member-card .title{
-  font-weight:1000;
-}
-.target-member-info{
-  display:flex;
-  flex-wrap:wrap;
-  align-items:center;
-  gap:6px;
-  margin:5px 0;
-  font-size:12px;
-}
-.claim-gift-grid{
-  grid-template-columns:minmax(0,1fr) auto;
+.code-type-pill.voucher{background:#dbeafe;color:#1d4ed8}
+.code-type-pill.gift{background:#ede9fe;color:#6d28d9}
+.claim-code-row{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px
 }
 .gift-code-display{
-  margin:14px 0;
-  padding:14px;
-  border:1px dashed #7c3aed;
-  border-radius:14px;
-  background:#f5f3ff;
-  font-size:24px;
-  font-weight:1000;
-  letter-spacing:.12em;
-  text-align:center;
+  margin:14px 0;padding:14px;border:1px dashed #7c3aed;
+  border-radius:14px;background:#f5f3ff;text-align:center;
+  font-size:24px;font-weight:1000;letter-spacing:.12em
 }
-.gift-hero{
-  text-align:center;
-  margin-bottom:16px;
-}
-.gift-icon{
-  font-size:46px;
-}
+.gift-hero{text-align:center;margin-bottom:16px}
+.gift-icon{font-size:48px}
 .gift-value-card{
-  margin:14px 0;
-  padding:18px;
-  border-radius:18px;
+  margin:14px 0;padding:18px;border-radius:18px;
   background:linear-gradient(135deg,#7c3aed,#4f46e5);
-  color:#fff;
-  text-align:center;
+  color:#fff;text-align:center
 }
 .gift-value-card span{
-  display:block;
-  font-size:12px;
-  font-weight:900;
-  letter-spacing:.06em;
-  text-transform:uppercase;
-  opacity:.85;
+  display:block;font-size:12px;font-weight:900;
+  letter-spacing:.06em;text-transform:uppercase;opacity:.85
 }
-.gift-value-card strong{
-  display:block;
-  margin-top:5px;
-  font-size:34px;
-}
+.gift-value-card strong{display:block;margin-top:5px;font-size:34px}
 .gift-value-card.success-gift{
-  background:linear-gradient(135deg,#15803d,#16a34a);
+  background:linear-gradient(135deg,#15803d,#16a34a)
 }
 @media(max-width:640px){
-  .claim-gift-grid{
-    grid-template-columns:1fr;
-  }
+  .claim-code-row{grid-template-columns:1fr}
 }

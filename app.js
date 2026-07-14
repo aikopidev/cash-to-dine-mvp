@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "3.2.0";
+const APP_VERSION = "3.2.1";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -62,7 +62,7 @@ function screen(html){ byId("screen").innerHTML = html; }
 function setNav(active){
   const u=currentUser(); const nav=byId("bottom-nav"); if(!nav||!u) return;
   if(u.role==="owner"){
-    nav.innerHTML = `<button class="${active==='owner'?'active':''}" onclick="setHash('owner')">Dashboard</button><button class="${active==='members'?'active':''}" onclick="setHash('members')">Members</button><button class="${active==='gift'?'active':''}" onclick="setHash('gift-generate')">Voucher</button><button class="${active==='report'?'active':''}" onclick="setHash('report')">Report</button><button class="${active==='kasir'?'active':''}" onclick="setHash('kasir')">Kasir</button>`;
+    nav.innerHTML = `<button class="${active==='owner'?'active':''}" onclick="setHash('owner')">Dashboard</button><button class="${active==='members'?'active':''}" onclick="setHash('members')">Members</button><button class="${active==='gift'?'active':''}" onclick="setHash('gift-generate')">Voucher/Gift</button><button class="${active==='report'?'active':''}" onclick="setHash('report')">Report</button><button class="${active==='kasir'?'active':''}" onclick="setHash('kasir')">Kasir</button>`;
   } else {
     nav.innerHTML = `<button class="${active==='kasir'?'active':''}" onclick="setHash('kasir')">Kasir</button><button class="${active==='register'?'active':''}" onclick="setHash('join')">Daftar</button><button class="${active==='report'?'active':''}" onclick="setHash('report')">Report</button>`;
   }
@@ -194,7 +194,7 @@ function historyListHtml(rows, emptyText="Belum ada transaksi."){
     const after = Number(t.balance_after || 0);
     const title = t.type === "use_balance"
       ? "Pakai Saldo"
-      : (t.type === "topup" ? "Top Up di Kasir" : (t.type === "gift_claim" ? "Gift Voucher" : "Transaksi"));
+      : (t.type === "topup" ? "Top Up di Kasir" : (t.type === "gift_claim" ? "Voucher / Gift" : "Transaksi"));
     return `
       <div class="history-item">
         <div class="history-head">
@@ -325,9 +325,8 @@ async function renderMember(){
     const ownerDelete = u.role === "owner" ? `
       <section class="card">
         <h2>Owner Controls</h2>
-        <p>Kirim gift voucher khusus member atau archive member jika saldo sudah Rp0.</p>
-        <button class="secondary full" id="send-member-gift-btn">Kirim Gift Voucher</button>
-        <button class="danger full" style="margin-top:8px" id="delete-member-btn">Archive Member</button>
+        <p>Archive member hanya untuk owner dan hanya bisa jika saldo Rp0. History tetap tersimpan.</p>
+        <button class="danger full" id="delete-member-btn">Archive Member</button>
         <div id="owner-action-result" style="margin-top:12px"></div>
       </section>
     ` : "";
@@ -390,14 +389,6 @@ async function renderMember(){
     };
 
     if(u.role === "owner"){
-      byId("send-member-gift-btn").onclick = ()=>{
-        setHash("gift-generate",{
-          member_id:m.member_id,
-          member_name:m.name,
-          member_phone:m.phone
-        });
-      };
-
       byId("delete-member-btn").onclick = async ()=>{
         const ok = confirm(`Archive member ${esc(m.name)} (${esc(m.phone)})?\n\nMember akan disembunyikan dari search/list. Saldo harus Rp0 dan history tetap tersimpan.`);
         if(!ok) return;
@@ -804,8 +795,8 @@ async function renderOwner(){
           <div class="desc">Lihat semua member yang pernah daftar, lengkap dengan nama, nomor telpon, saldo, dan export TXT/PDF.</div>
         </button>
         <button class="action-card" onclick="setHash('gift-generate')">
-          <div class="title">Voucher Control</div>
-          <div class="desc">Monitor voucher available, terdaftar, claimed, expired, deleted. Copy WA per voucher.</div>
+          <div class="title">Voucher & Gift</div>
+          <div class="desc">Generate Voucher untuk member baru dan Gift untuk existing member.</div>
         </button>
         <button class="action-card" onclick="setHash('report')">
           <div class="title">Transaction Report</div>
@@ -846,35 +837,78 @@ async function renderGiftGenerate(){
   mountLayout();
   setNav("gift");
 
-  const {params}=getRoute();
-  const defaultExpiry=new Date(Date.now()+30*86400000).toISOString().slice(0,10);
+  const defaultExpiry=new Date(Date.now()+30*86400000)
+    .toISOString()
+    .slice(0,10);
 
   screen(`
+    <section class="card generate-code-card">
+      <h1>Generate Voucher / Gift</h1>
+      <p>Pilih jenis kode sesuai tujuan. Satu kode hanya dapat digunakan satu kali.</p>
+
+      <form id="campaign-code-form">
+        <label>Jenis Kode</label>
+        <select id="code-type">
+          <option value="voucher">VOUCHER — New Member</option>
+          <option value="gift">GIFT — Existing Member</option>
+        </select>
+
+        <div id="code-type-help" class="type-help"></div>
+
+        <label>Campaign / Event</label>
+        <input id="campaign" value="Soft Opening CACAYO" required/>
+
+        <div class="grid two">
+          <div>
+            <label>Jumlah Kode</label>
+            <input id="qty" inputmode="numeric" value="5" required/>
+          </div>
+          <div>
+            <label>Nominal per Kode</label>
+            <input id="value" inputmode="numeric" value="100000" required/>
+          </div>
+        </div>
+
+        <label>Expired Date</label>
+        <input id="expired" type="date" value="${defaultExpiry}" required/>
+
+        <button class="full" id="generate-code-btn" style="margin-top:14px">
+          Generate Voucher
+        </button>
+      </form>
+
+      <div id="gift-result" style="margin-top:12px"></div>
+    </section>
+
     <section class="card">
-      <h1>Voucher Control Center</h1>
-      <p>Voucher untuk member baru dan existing member. Voucher yang sudah dicopy akan terkunci dan tidak bisa dicopy ulang.</p>
+      <h2>Voucher & Gift Control</h2>
+      <p>
+        Voucher untuk pendaftaran member baru. Gift untuk existing member dan
+        akan diterima oleh member pertama yang berhasil claim.
+      </p>
+
       <div id="voucher-summary" class="voucher-summary">
         <div class="stat"><div class="label">Total</div><div class="value">-</div></div>
         <div class="stat"><div class="label">Available</div><div class="value">-</div></div>
-        <div class="stat"><div class="label">Terdaftar</div><div class="value">-</div></div>
+        <div class="stat"><div class="label">Registered</div><div class="value">-</div></div>
         <div class="stat"><div class="label">Claimed</div><div class="value">-</div></div>
       </div>
 
       <div class="voucher-toolbar">
         <select id="voucher-filter">
           <option value="available">Available</option>
-          <option value="all">All status</option>
-          <option value="registered">Terdaftar</option>
+          <option value="all">All Status</option>
+          <option value="registered">Registered</option>
           <option value="claimed">Claimed</option>
           <option value="expired">Expired</option>
           <option value="void">Deleted / Void</option>
         </select>
-        <span class="badge">Copy hanya 1x per voucher</span>
+        <span class="badge">1 kode = 1 penerima</span>
         <button class="ghost" id="refresh-vouchers" type="button">Refresh</button>
       </div>
 
       <div id="voucher-list" class="list">
-        <div class="notice">Loading voucher list...</div>
+        <div class="notice">Loading voucher & gift...</div>
       </div>
 
       <div class="pagination-bar">
@@ -883,279 +917,236 @@ async function renderGiftGenerate(){
         <button class="ghost" id="next-page" type="button">Next →</button>
       </div>
     </section>
-
-    <section class="card member-gift-card">
-      <div class="section-eyebrow">EXISTING MEMBER</div>
-      <h2>Kirim Gift ke Existing Member</h2>
-      <p>Gift terikat ke member yang dipilih. Jika link diteruskan, akun lain tetap tidak bisa claim.</p>
-
-      <label>Cari Existing Member</label>
-      <input id="member-gift-search" placeholder="Nama atau nomor WhatsApp" value="${esc(params.member_phone||params.member_name||"")}"/>
-      <div id="member-gift-search-result" class="member-gift-search-result"></div>
-      <div id="selected-gift-member"></div>
-
-      <form id="existing-member-gift-form">
-        <label>Campaign / Event</label>
-        <input id="existing-gift-campaign" value="Special Gift CACAYO" required/>
-
-        <div class="grid two">
-          <div>
-            <label>Nominal Gift</label>
-            <input id="existing-gift-value" inputmode="numeric" value="100000" required/>
-          </div>
-          <div>
-            <label>Voucher Expired Date</label>
-            <input id="existing-gift-expired" type="date" value="${defaultExpiry}" required/>
-          </div>
-        </div>
-
-        <div class="notice">
-          Saat diclaim, nominal gift langsung menambah saldo member.
-          Expiry gift tidak akan memperpendek masa aktif saldo yang sudah ada.
-        </div>
-
-        <button class="full" style="margin-top:14px">Generate Gift untuk Member</button>
-      </form>
-      <div id="existing-member-gift-result" style="margin-top:12px"></div>
-    </section>
-
-    <section class="card">
-      <div class="section-eyebrow">MEMBER BARU</div>
-      <h2>Generate Voucher Pendaftaran</h2>
-      <p>Voucher ini dipakai saat customer baru mendaftar sebagai member.</p>
-
-      <form id="gift-form">
-        <label>Campaign / Event Name</label>
-        <input id="campaign" value="Soft Opening Cacayo" required/>
-
-        <div class="grid two">
-          <div>
-            <label>Jumlah Kode</label>
-            <input id="qty" inputmode="numeric" value="10" required/>
-          </div>
-          <div>
-            <label>Value per Code</label>
-            <input id="value" inputmode="numeric" value="100000" required/>
-          </div>
-        </div>
-
-        <label>Expired Date</label>
-        <input id="expired" type="date" value="${defaultExpiry}" required/>
-        <button class="full" style="margin-top:14px">Generate Voucher Member Baru</button>
-      </form>
-      <div id="gift-result" style="margin-top:12px"></div>
-    </section>
   `);
 
   const joinBase=`${publicBaseUrl()}#join?code=`;
-  const claimBase=`${publicBaseUrl()}#claim-gift?code=`;
+  const giftClaimBase=`${publicBaseUrl()}#claim-gift?code=`;
 
-  let selectedGiftMember = params.member_id
-    ? {
-        member_id:params.member_id,
-        name:params.member_name||"-",
-        phone:params.member_phone||"-"
-      }
-    : null;
-
-  let memberSearchRows=[];
   let currentPage=1;
   const pageSize=10;
   let currentRows=[];
   let totalCount=0;
 
-  function voucherStatusClass(s){
-    if(s==="registered")return "registered";
-    if(s==="claimed")return "claimed";
-    if(s==="used")return "registered";
-    return s==="expired"?"expired":(s==="void"?"void":"available");
+  function normalizedCodeType(value){
+    return String(value||"voucher").toLowerCase()==="gift"
+      ? "gift"
+      : "voucher";
   }
 
-  function voucherLink(data){
-    return data.gift_type==="existing_member"
-      ? `${claimBase}${data.code}`
-      : `${joinBase}${data.code}`;
+  function codeTypeLabel(value){
+    return normalizedCodeType(value)==="gift"
+      ? "GIFT — EXISTING MEMBER"
+      : "VOUCHER — NEW MEMBER";
   }
 
-  function waMessageFor(data){
-    if(data.gift_type==="existing_member"){
-      const recipient=data.target_member_name||"Kak";
-      return `Halo ${recipient}, kamu mendapat Gift Dining Credit ${money(data.value)} dari ${OUTLET}.
+  function codeLink(row){
+    return normalizedCodeType(row.code_type)==="gift"
+      ? `${giftClaimBase}${row.code}`
+      : `${joinBase}${row.code}`;
+  }
 
-Event: ${data.campaign_name||"Special Gift CACAYO"}
-Berlaku sampai: ${data.expired_at||"-"}
+  function waMessageFor(row){
+    const type=normalizedCodeType(row.code_type);
+    const event=row.campaign_name||"-";
+    const expiry=row.expired_at||"-";
+    const link=codeLink(row);
 
-Claim gift melalui link ini:
-${voucherLink(data)}
+    if(type==="gift"){
+      return `Halo Kak 🎁
 
-Login menggunakan nomor WhatsApp dan PIN member.
-Voucher ini khusus untuk akun kamu dan hanya bisa digunakan 1x.`;
+Kamu mendapatkan Gift Dining Credit ${money(row.value)} dari ${OUTLET}.
+
+Event: ${event}
+Berlaku sampai: ${expiry}
+
+Klik link berikut untuk menerima gift:
+${link}
+
+Login menggunakan nomor WhatsApp dan PIN member CACAYO, lalu cek detail gift dan klik CLAIM / OK.
+
+Gift hanya dapat diclaim 1 kali oleh member CACAYO yang sudah terdaftar. Member pertama yang berhasil claim akan menerima saldo gift.`;
     }
 
-    return `Halo Kak, kamu dapat Gift Dining Credit ${money(data.value)} dari ${OUTLET}.
+    return `Halo Kak 🎁
 
-Daftar member di link ini:
-${voucherLink(data)}
+Kamu mendapatkan Voucher Dining Credit ${money(row.value)} dari ${OUTLET}.
 
-Gift Code: ${data.code}
+Event: ${event}
+Berlaku sampai: ${expiry}
 
-Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
+Daftar dan aktifkan voucher melalui link berikut:
+${link}
+
+Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
   }
 
-  function renderSelectedGiftMember(){
-    const box=byId("selected-gift-member");
-    if(!selectedGiftMember){
-      box.innerHTML=`<div class="notice">Belum ada member yang dipilih.</div>`;
-      return;
+  function voucherStatusClass(status){
+    if(status==="registered"||status==="used")return "registered";
+    if(status==="claimed")return "claimed";
+    if(status==="expired")return "expired";
+    if(status==="void")return "void";
+    return "available";
+  }
+
+  function renderTypeHelp(){
+    const type=normalizedCodeType(byId("code-type").value);
+    const help=byId("code-type-help");
+    const button=byId("generate-code-btn");
+    const campaign=byId("campaign");
+
+    if(type==="gift"){
+      help.innerHTML=`
+        <div class="gift-type-card">
+          <b>GIFT — Existing Member</b>
+          <span>
+            Tidak terikat ke nama tertentu. Existing member pertama yang login
+            dan claim akan menerima saldo gift.
+          </span>
+        </div>`;
+      button.textContent="Generate Gift";
+      if(campaign.value==="Soft Opening CACAYO"){
+        campaign.value="Special Gift CACAYO";
+      }
+    }else{
+      help.innerHTML=`
+        <div class="voucher-type-card">
+          <b>VOUCHER — New Member</b>
+          <span>
+            Digunakan satu kali saat customer baru melakukan pendaftaran member.
+          </span>
+        </div>`;
+      button.textContent="Generate Voucher";
+      if(campaign.value==="Special Gift CACAYO"){
+        campaign.value="Soft Opening CACAYO";
+      }
     }
-
-    box.innerHTML=`
-      <div class="selected-member-card">
-        <div>
-          <div class="title">${esc(selectedGiftMember.name||"-")}</div>
-          <div class="meta">${esc(selectedGiftMember.phone||"-")}</div>
-        </div>
-        <span class="badge ok">SELECTED</span>
-      </div>`;
   }
 
-  window.selectExistingGiftMember=(index)=>{
-    const member=memberSearchRows[index];
-    if(!member)return;
-    selectedGiftMember={
-      member_id:member.member_id,
-      name:member.name,
-      phone:member.phone
-    };
-    byId("member-gift-search").value=`${member.name} • ${member.phone}`;
-    byId("member-gift-search-result").innerHTML="";
-    renderSelectedGiftMember();
-  };
-
-  let searchTimer=null;
-  byId("member-gift-search").oninput=()=>{
-    clearTimeout(searchTimer);
-    searchTimer=setTimeout(async()=>{
-      const q=byId("member-gift-search").value.trim();
-      const box=byId("member-gift-search-result");
-
-      if(q.length<3){
-        box.innerHTML="";
-        return;
-      }
-
-      box.innerHTML=`<div class="notice">Mencari member...</div>`;
-
-      try{
-        const rows=await rpc("s3_search_members",{
-          p_staff_session_token:u.session_token,
-          p_query:q
-        });
-        memberSearchRows=(rows||[]).filter(m=>m.status!=="deleted");
-
-        if(!memberSearchRows.length){
-          box.innerHTML=`<div class="notice">Member tidak ditemukan.</div>`;
-          return;
-        }
-
-        box.innerHTML=memberSearchRows.map((m,i)=>`
-          <button class="member-search-option" type="button"
-            onclick="window.selectExistingGiftMember(${i})">
-            <span>
-              <b>${esc(m.name)}</b>
-              <small>${esc(m.phone)} • ${esc(m.member_code||"-")}</small>
-            </span>
-            <strong>${money(m.balance||0)}</strong>
-          </button>
-        `).join("");
-      }catch(err){
-        box.innerHTML=`<div class="error">${safeError(err)}</div>`;
-      }
-    },350);
-  };
-
-  function renderSummaryFromRows(rows){
+  function renderSummary(rows){
     const available=rows.filter(v=>v.voucher_status==="available").length;
-    const registered=rows.filter(v=>v.voucher_status==="registered"||v.voucher_status==="used").length;
+    const registered=rows.filter(
+      v=>v.voucher_status==="registered"||v.voucher_status==="used"
+    ).length;
     const claimed=rows.filter(v=>v.voucher_status==="claimed").length;
 
     byId("voucher-summary").innerHTML=`
       <div class="stat"><div class="label">Total Filter</div><div class="value">${totalCount}</div></div>
       <div class="stat"><div class="label">Available Page</div><div class="value">${available}</div></div>
-      <div class="stat"><div class="label">Terdaftar Page</div><div class="value">${registered}</div></div>
+      <div class="stat"><div class="label">Registered Page</div><div class="value">${registered}</div></div>
       <div class="stat"><div class="label">Claimed Page</div><div class="value">${claimed}</div></div>
     `;
   }
 
   function renderPagination(){
     const totalPages=Math.max(1,Math.ceil(totalCount/pageSize));
-    byId("page-info").textContent=`Page ${currentPage} / ${totalPages} • ${totalCount} voucher`;
+    byId("page-info").textContent=
+      `Page ${currentPage} / ${totalPages} • ${totalCount} kode`;
     byId("prev-page").disabled=currentPage<=1;
     byId("next-page").disabled=currentPage>=totalPages;
   }
 
+  function copiedStatusHtml(row){
+    if(!row.copied_at)return "";
+
+    const type=normalizedCodeType(row.code_type);
+    const method=String(row.copied_method||"").toLowerCase();
+    const label=type==="gift"&&method==="wa"
+      ? "WA OPENED"
+      : `COPIED ${method.toUpperCase()||""}`.trim();
+
+    return `
+      <div class="meta copied-meta">
+        ${esc(label)} • ${new Date(row.copied_at).toLocaleString("id-ID")}
+      </div>`;
+  }
+
   function renderVoucherRows(){
     if(!currentRows.length){
-      byId("voucher-list").innerHTML=`<div class="notice">Tidak ada voucher untuk filter ini.</div>`;
+      byId("voucher-list").innerHTML=
+        `<div class="notice">Tidak ada kode untuk filter ini.</div>`;
       renderPagination();
       return;
     }
 
-    byId("voucher-list").innerHTML=currentRows.map(v=>{
-      const cls=voucherStatusClass(v.voucher_status);
-      const isAvailable=v.voucher_status==="available";
-      const isRegistered=v.voucher_status==="registered"||v.voucher_status==="used";
-      const isClaimed=v.voucher_status==="claimed";
-      const isCopied=Boolean(v.copied_at);
-      const copyMethod=String(v.copied_method||"").toUpperCase();
-      const isExisting=v.gift_type==="existing_member";
+    byId("voucher-list").innerHTML=currentRows.map(row=>{
+      const type=normalizedCodeType(row.code_type);
+      const cls=voucherStatusClass(row.voucher_status);
+      const isAvailable=row.voucher_status==="available";
+      const isRegistered=
+        row.voucher_status==="registered"||row.voucher_status==="used";
+      const isClaimed=row.voucher_status==="claimed";
+      const isCopied=Boolean(row.copied_at);
 
-      const targetInfo=isExisting
-        ? `<div class="target-member-info">
-             <span class="badge">EXISTING MEMBER</span>
-             <b>${esc(v.target_member_name||"-")}</b>
-             <span>${esc(v.target_member_phone||"-")}</span>
-           </div>`
-        : `<div class="target-member-info"><span class="badge">MEMBER BARU</span></div>`;
-
-      const usedInfo=isRegistered
-        ? `<div class="meta">Terdaftar oleh: ${esc(v.used_by_name||"-")} • ${esc(v.used_by_phone||"-")}</div>`
-        : (isClaimed
-          ? `<div class="meta">Claimed by: ${esc(v.used_by_name||"-")} • ${esc(v.used_by_phone||"-")}</div>`
-          : (isAvailable
+      const activityInfo=isRegistered
+        ? `<div class="meta">Registered by: ${esc(row.used_by_name||"-")} • ${esc(row.used_by_phone||"-")}</div>`
+        : isClaimed
+          ? `<div class="meta">Claimed by: ${esc(row.used_by_name||"-")} • ${esc(row.used_by_phone||"-")}</div>`
+          : isAvailable
             ? (isCopied
-              ? `<div class="meta copied-meta">COPIED${copyMethod?` via ${esc(copyMethod)}`:""} • ${new Date(v.copied_at).toLocaleString("id-ID")}</div>`
-              : `<div class="meta">Belum dicopy / belum dikirim</div>`)
-            : `<div class="meta">Status: ${esc(v.voucher_status)}</div>`));
+                ? copiedStatusHtml(row)
+                : `<div class="meta">Belum dibagikan</div>`)
+            : `<div class="meta">Status: ${esc(row.voucher_status||"-")}</div>`;
 
-      const actions=isAvailable
-        ? (isCopied
-          ? `<div class="voucher-actions copied-actions"><span class="copied-badge">✓ COPIED</span></div>`
-          : `<div class="voucher-actions">
-               <button class="secondary" type="button"
-                 onclick="window.copyVoucherOnce('${v.gift_id}','wa',this)">Copy WA</button>
-               <button class="ghost" type="button"
-                 onclick="window.copyVoucherOnce('${v.gift_id}','link',this)">Copy Link</button>
-               <button class="danger" type="button"
-                 onclick="window.deleteVoucher('${v.gift_id}','${v.code}')">Delete</button>
-             </div>`)
-        : `<div class="voucher-actions"><span class="badge">${isRegistered?"TERDAFTAR":(isClaimed?"CLAIMED":"Not active")}</span></div>`;
+      let actions="";
+
+      if(isAvailable){
+        if(isCopied){
+          const copiedLabel=type==="gift"&&row.copied_method==="wa"
+            ? "✓ WA OPENED"
+            : "✓ COPIED";
+
+          actions=`
+            <div class="voucher-actions copied-actions">
+              <span class="copied-badge">${copiedLabel}</span>
+            </div>`;
+        }else{
+          const waLabel=type==="gift"?"Kirim via WhatsApp":"Copy WA";
+
+          actions=`
+            <div class="voucher-actions">
+              <button class="secondary" type="button"
+                onclick="window.shareCampaignCode('${row.gift_id}','wa','${type}',this)">
+                ${waLabel}
+              </button>
+              <button class="ghost" type="button"
+                onclick="window.shareCampaignCode('${row.gift_id}','link','${type}',this)">
+                Copy Link
+              </button>
+              <button class="danger" type="button"
+                onclick="window.deleteCampaignCode('${row.gift_id}','${esc(row.code)}')">
+                Delete
+              </button>
+            </div>`;
+        }
+      }else{
+        actions=`
+          <div class="voucher-actions">
+            <span class="badge">
+              ${isRegistered?"REGISTERED":isClaimed?"CLAIMED":"NOT ACTIVE"}
+            </span>
+          </div>`;
+      }
 
       return `
         <div class="voucher-row ${cls}">
           <div>
-            <div class="code-box">${esc(v.code)}</div>
-            <div class="meta">Exp: ${esc(v.expired_at||"-")}</div>
+            <div class="code-box">${esc(row.code)}</div>
+            <div class="meta">Exp: ${esc(row.expired_at||"-")}</div>
           </div>
+
           <div>
-            <div class="campaign">${esc(v.campaign_name||"-")}</div>
-            ${targetInfo}
-            ${usedInfo}
+            <span class="code-type-pill ${type}">${codeTypeLabel(type)}</span>
+            <div class="campaign">${esc(row.campaign_name||"-")}</div>
+            ${activityInfo}
           </div>
+
           <div>
-            <div class="money">${money(v.value)}</div>
-            <span class="status-pill ${cls}">${esc(String(v.voucher_status||"").toUpperCase())}</span>
+            <div class="money">${money(row.value)}</div>
+            <span class="status-pill ${cls}">
+              ${esc(String(row.voucher_status||"").toUpperCase())}
+            </span>
           </div>
+
           ${actions}
         </div>`;
     }).join("");
@@ -1163,11 +1154,12 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
     renderPagination();
   }
 
-  async function loadVouchers(){
+  async function loadCodes(){
     const filter=byId("voucher-filter").value;
     const offset=(currentPage-1)*pageSize;
 
-    byId("voucher-list").innerHTML=`<div class="notice">Loading voucher list...</div>`;
+    byId("voucher-list").innerHTML=
+      `<div class="notice">Loading voucher & gift...</div>`;
 
     try{
       const rows=await rpc("s3_list_gift_codes_paged",{
@@ -1178,11 +1170,15 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
       });
 
       currentRows=rows||[];
-      totalCount=currentRows.length?Number(currentRows[0].total_count||0):0;
-      renderSummaryFromRows(currentRows);
+      totalCount=currentRows.length
+        ? Number(currentRows[0].total_count||0)
+        : 0;
+
+      renderSummary(currentRows);
       renderVoucherRows();
     }catch(err){
-      byId("voucher-list").innerHTML=`<div class="error">${safeError(err)}</div>`;
+      byId("voucher-list").innerHTML=
+        `<div class="error">${safeError(err)}</div>`;
     }
   }
 
@@ -1191,18 +1187,39 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
       await navigator.clipboard.writeText(text);
       return true;
     }catch(err){
-      window.prompt("Clipboard browser gagal. Copy teks berikut secara manual:",text);
+      window.prompt(
+        "Clipboard browser gagal. Copy teks berikut secara manual:",
+        text
+      );
       return false;
     }
   }
 
-  window.copyVoucherOnce=async(giftId,method,button)=>{
+  window.shareCampaignCode=async(giftId,method,type,button)=>{
     if(!giftId||!["wa","link"].includes(method))return;
 
-    const row=button?button.closest(".voucher-row"):null;
-    const rowButtons=row?Array.from(row.querySelectorAll("button")):[];
+    const normalizedType=normalizedCodeType(type);
+    const shouldOpenWhatsApp=normalizedType==="gift"&&method==="wa";
+    const waWindow=shouldOpenWhatsApp
+      ? window.open("about:blank","_blank")
+      : null;
+
+    if(waWindow){
+      try{waWindow.opener=null;}catch(e){}
+    }
+
+    const rowElement=button?button.closest(".voucher-row"):null;
+    const rowButtons=rowElement
+      ? Array.from(rowElement.querySelectorAll("button"))
+      : [];
+
     rowButtons.forEach(btn=>btn.disabled=true);
-    if(button)button.textContent="COPYING...";
+
+    if(button){
+      button.textContent=shouldOpenWhatsApp
+        ? "OPENING WA..."
+        : "COPYING...";
+    }
 
     try{
       const rows=await rpc("s3_copy_gift_code",{
@@ -1210,155 +1227,153 @@ Kode ini hanya bisa digunakan 1x saat daftar member baru.`;
         p_gift_id:giftId,
         p_method:method
       });
-      const d=rows&&rows[0]?rows[0]:{};
+      const result=rows&&rows[0]?rows[0]:{};
 
-      if(d.copy_allowed===false){
-        alert(d.error_message||"Voucher sudah pernah dicopy.");
-        await loadVouchers();
+      if(result.copy_allowed===false){
+        if(waWindow)waWindow.close();
+        alert(result.error_message||"Kode sudah pernah dibagikan.");
+        await loadCodes();
         return;
       }
 
-      const text=method==="wa"
-        ? waMessageFor(d)
-        : voucherLink(d);
+      const message=waMessageFor(result);
+      const link=codeLink(result);
 
-      const copied=await copyWithFallback(text);
-      await loadVouchers();
+      if(shouldOpenWhatsApp){
+        const waUrl=`https://wa.me/?text=${encodeURIComponent(message)}`;
 
-      if(copied){
-        alert(`${method==="wa"?"WA invite":"Link"} ${d.code} berhasil dicopy. Voucher sekarang terkunci.`);
+        if(waWindow){
+          waWindow.location.href=waUrl;
+        }else{
+          await copyWithFallback(message);
+          alert(
+            "WhatsApp popup diblokir browser. Pesan sudah disiapkan di clipboard."
+          );
+        }
+      }else{
+        const text=method==="wa"?message:link;
+        const copied=await copyWithFallback(text);
+
+        if(copied){
+          alert(
+            `${method==="wa"?"Pesan WhatsApp":"Link"} ${result.code} berhasil dicopy.`
+          );
+        }
       }
+
+      await loadCodes();
     }catch(err){
+      if(waWindow)waWindow.close();
       rowButtons.forEach(btn=>btn.disabled=false);
-      if(button)button.textContent=method==="wa"?"Copy WA":"Copy Link";
+
+      if(button){
+        button.textContent=shouldOpenWhatsApp
+          ? "Kirim via WhatsApp"
+          : method==="wa"
+            ? "Copy WA"
+            : "Copy Link";
+      }
+
       alert(safeError(err));
     }
   };
 
-  window.deleteVoucher=async(giftId,code)=>{
-    if(!confirm(`Delete / void voucher ${code}?`))return;
+  window.deleteCampaignCode=async(giftId,code)=>{
+    if(!confirm(
+      `Delete / void kode ${code}? Kode yang sudah dihapus tidak bisa digunakan.`
+    ))return;
 
     try{
       await rpc("s3_delete_gift_code",{
         p_staff_session_token:u.session_token,
         p_gift_id:giftId
       });
-      alert(`Voucher ${code} deleted/void.`);
-      await loadVouchers();
+      alert(`Kode ${code} deleted / void.`);
+      await loadCodes();
     }catch(err){
       alert(safeError(err));
     }
   };
 
+  byId("code-type").onchange=renderTypeHelp;
+
   byId("voucher-filter").onchange=()=>{
     currentPage=1;
-    loadVouchers();
+    loadCodes();
   };
-  byId("refresh-vouchers").onclick=loadVouchers;
+
+  byId("refresh-vouchers").onclick=loadCodes;
+
   byId("prev-page").onclick=()=>{
     if(currentPage>1){
       currentPage--;
-      loadVouchers();
+      loadCodes();
     }
   };
+
   byId("next-page").onclick=()=>{
     currentPage++;
-    loadVouchers();
+    loadCodes();
   };
 
-  byId("existing-member-gift-form").onsubmit=async(e)=>{
-    e.preventDefault();
+  byId("campaign-code-form").onsubmit=async(event)=>{
+    event.preventDefault();
 
-    const box=byId("existing-member-gift-result");
-    const value=parseMoney(byId("existing-gift-value").value);
-    const campaign=byId("existing-gift-campaign").value.trim();
-    const expired=byId("existing-gift-expired").value;
-
-    if(!selectedGiftMember){
-      box.innerHTML=`<div class="error">Pilih existing member terlebih dahulu.</div>`;
-      return;
-    }
-
-    if(value<=0){
-      box.innerHTML=`<div class="error">Nominal gift harus lebih dari Rp0.</div>`;
-      return;
-    }
-
-    if(!confirm(`Kirim gift ${money(value)} untuk ${selectedGiftMember.name}?`)){
-      return;
-    }
-
-    box.innerHTML=`<div class="notice">Generating gift voucher khusus member...</div>`;
-
-    try{
-      const rows=await rpc("s3_generate_member_gift",{
-        p_staff_session_token:u.session_token,
-        p_member_id:selectedGiftMember.member_id,
-        p_campaign_name:campaign,
-        p_value:value,
-        p_expired_at:expired
-      });
-      const d=rows&&rows[0]?rows[0]:{};
-
-      box.innerHTML=`
-        <div class="success">
-          <b>Gift Voucher Berhasil Dibuat ✅</b><br>
-          Recipient: <b>${esc(d.target_member_name||selectedGiftMember.name)}</b><br>
-          Nominal: <b>${money(d.value||value)}</b><br>
-          Code: <b>${esc(d.code||"-")}</b>
-        </div>
-        <div class="notice" style="margin-top:10px">
-          Copy voucher dari list Available melalui Copy WA atau Copy Link.
-        </div>`;
-
-      currentPage=1;
-      byId("voucher-filter").value="available";
-      await loadVouchers();
-    }catch(err){
-      box.innerHTML=`<div class="error">${safeError(err)}</div>`;
-    }
-  };
-
-  byId("gift-form").onsubmit=async(e)=>{
-    e.preventDefault();
-
+    const type=normalizedCodeType(byId("code-type").value);
     const qty=Math.min(parseMoney(byId("qty").value),500);
     const value=parseMoney(byId("value").value);
-    const camp=byId("campaign").value.trim();
-    const exp=byId("expired").value;
+    const campaign=byId("campaign").value.trim();
+    const expired=byId("expired").value;
     const box=byId("gift-result");
 
-    box.innerHTML=`<div class="notice">Generating ${qty} voucher member baru...</div>`;
+    if(qty<1){
+      box.innerHTML=`<div class="error">Jumlah kode minimal 1.</div>`;
+      return;
+    }
+
+    if(value<1000){
+      box.innerHTML=`<div class="error">Nominal minimal Rp1.000.</div>`;
+      return;
+    }
+
+    box.innerHTML=`
+      <div class="notice">
+        Generating ${qty} ${type==="gift"?"gift":"voucher"}...
+      </div>`;
 
     try{
-      const created=await rpc("s3_generate_gift_codes_batch",{
+      const created=await rpc("s3_generate_campaign_codes",{
         p_staff_session_token:u.session_token,
-        p_campaign_name:camp,
+        p_code_type:type,
+        p_campaign_name:campaign,
         p_value:value,
-        p_expired_at:exp,
+        p_expired_at:expired,
         p_qty:qty
       });
+
       const rows=created||[];
 
       box.innerHTML=`
         <div class="success">
-          <b>${rows.length} Voucher Member Baru Generated ✅</b><br>
-          Total Liability: ${money(rows.length*value)}
+          <b>${rows.length} ${type==="gift"?"Gift":"Voucher"} Generated ✅</b><br>
+          Total value: <b>${money(rows.length*value)}</b>
         </div>
         <div class="notice" style="margin-top:10px">
-          Copy satu per satu dari list Available.
+          ${type==="gift"
+            ? "Klik Kirim via WhatsApp pada masing-masing Gift. WhatsApp akan terbuka dengan pesan yang sudah siap."
+            : "Copy pesan atau link masing-masing Voucher untuk dikirim ke calon member."}
         </div>`;
 
       currentPage=1;
       byId("voucher-filter").value="available";
-      await loadVouchers();
+      await loadCodes();
     }catch(err){
       box.innerHTML=`<div class="error">${safeError(err)}</div>`;
     }
   };
 
-  renderSelectedGiftMember();
-  await loadVouchers();
+  renderTypeHelp();
+  await loadCodes();
 }
 async function renderMembers(){
   const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("members");
@@ -1509,7 +1524,9 @@ function renderCustomerLogin(){
       ${brandMiniHtml()}
       <h1>Customer Portal</h1>
       <p>Login menggunakan nomor WhatsApp dan PIN untuk melihat saldo serta riwayat transaksi.</p>
-      ${claimCode?`<div class="notice">Login untuk claim Gift Code <b>${esc(claimCode)}</b>.</div>`:""}
+      ${claimCode
+        ? `<div class="notice">Login untuk melihat dan claim Gift Code <b>${esc(claimCode)}</b>.</div>`
+        : ""}
       <form id="customer-login-form">
         <label>Nomor WhatsApp</label>
         <input id="customer-phone" inputmode="numeric" placeholder="628xxxxxxxxxx" autocomplete="tel" required/>
@@ -1518,9 +1535,10 @@ function renderCustomerLogin(){
         <button class="full" style="margin-top:14px">Login Customer</button>
       </form>
       <div id="customer-login-result" style="margin-top:12px"></div>
-      <div class="divider"></div>
-      <button class="ghost full" onclick="setHash('join')">Daftar Member Baru</button>
-      
+      ${claimCode
+        ? ""
+        : `<div class="divider"></div>
+           <button class="ghost full" onclick="setHash('join')">Daftar Member Baru</button>`}
     </section>
   `;
 
@@ -1590,11 +1608,11 @@ async function renderCustomerPortal(){
       </section>
 
       <section class="card">
-        <h2>Claim Gift Voucher</h2>
-        <p>Masukkan Gift Code yang dikirim khusus untuk akun member kamu.</p>
-        <div class="grid claim-gift-grid">
+        <h2>Claim Gift</h2>
+        <p>Masukkan Gift Code yang dikirim CACAYO melalui WhatsApp.</p>
+        <div class="claim-code-row">
           <input id="portal-gift-code" class="code-box" placeholder="Masukkan Gift Code"/>
-          <button id="portal-claim-gift-btn">Lanjut Claim</button>
+          <button id="portal-gift-claim-btn">Lanjut</button>
         </div>
       </section>
 
@@ -1610,7 +1628,7 @@ async function renderCustomerPortal(){
       </section>
     `;
 
-    byId("portal-claim-gift-btn").onclick=()=>{
+    byId("portal-gift-claim-btn").onclick=()=>{
       const code=byId("portal-gift-code").value.trim().toUpperCase();
       if(!code){
         alert("Masukkan Gift Code.");
@@ -1620,7 +1638,11 @@ async function renderCustomerPortal(){
     };
 
     byId("customer-logout-btn").onclick = async()=>{
-      try{ await rpc("mvp_customer_logout",{p_session_token:session.session_token}); }catch(e){}
+      try{
+        await rpc("mvp_customer_logout",{
+          p_session_token:session.session_token
+        });
+      }catch(e){}
       clearCustomerSession();
       setHash("customer-login");
     };
@@ -1637,26 +1659,41 @@ async function renderClaimGift(){
   const session=getCustomerSession();
 
   clearSession();
-  byId("app").innerHTML=`<main style="padding:16px;max-width:600px;margin:auto"></main>`;
+  byId("app").innerHTML=
+    `<main style="padding:16px;max-width:600px;margin:auto"></main>`;
+
   const target=document.querySelector("main");
 
   if(!code){
     target.innerHTML=`
       <section class="card">
         ${brandMiniHtml()}
-        <h1>Claim Gift Voucher</h1>
-        <p>Masukkan Gift Code yang kamu terima dari CACAYO.</p>
-        <input id="claim-page-code" class="code-box" placeholder="Gift Code"/>
-        <button class="full" style="margin-top:12px" id="claim-page-continue">Lanjut</button>
+        <h1>Claim Gift</h1>
+        <p>Masukkan Gift Code yang kamu terima melalui WhatsApp.</p>
+        <input id="claim-gift-code-input" class="code-box"
+          placeholder="Gift Code"/>
+        <button class="full" style="margin-top:12px"
+          id="claim-gift-code-continue">
+          Lanjut
+        </button>
+        <button class="ghost full" style="margin-top:8px"
+          onclick="setHash('customer-portal')">
+          Kembali
+        </button>
       </section>`;
 
-    byId("claim-page-continue").onclick=()=>{
-      const input=byId("claim-page-code").value.trim().toUpperCase();
-      if(!input){
+    byId("claim-gift-code-continue").onclick=()=>{
+      const entered=byId("claim-gift-code-input")
+        .value
+        .trim()
+        .toUpperCase();
+
+      if(!entered){
         alert("Masukkan Gift Code.");
         return;
       }
-      setHash("claim-gift",{code:input});
+
+      setHash("claim-gift",{code:entered});
     };
     return;
   }
@@ -1665,11 +1702,22 @@ async function renderClaimGift(){
     target.innerHTML=`
       <section class="card">
         ${brandMiniHtml()}
-        <h1>Kamu Mendapat Gift dari CACAYO 🎁</h1>
+        <div class="gift-hero">
+          <div class="gift-icon">🎁</div>
+          <h1>Kamu Mendapat Gift dari CACAYO</h1>
+        </div>
         <div class="gift-code-display">${esc(code)}</div>
-        <p>Login dengan nomor WhatsApp dan PIN member untuk melihat dan claim gift.</p>
-        <button class="full" onclick="setHash('customer-login',{claim:'${esc(code)}'})">Login untuk Claim</button>
-        <button class="ghost full" style="margin-top:8px" onclick="setHash('customer-login')">Kembali</button>
+        <p>
+          Login dengan nomor WhatsApp dan PIN member untuk melihat detail gift.
+        </p>
+        <button class="full"
+          onclick="setHash('customer-login',{claim:'${esc(code)}'})">
+          Login untuk Claim
+        </button>
+        <button class="ghost full" style="margin-top:8px"
+          onclick="setHash('customer-login')">
+          Kembali
+        </button>
       </section>`;
     return;
   }
@@ -1677,28 +1725,33 @@ async function renderClaimGift(){
   target.innerHTML=`
     <section class="card">
       ${brandMiniHtml()}
-      <h1>Memeriksa Gift Voucher...</h1>
+      <h1>Memeriksa Gift...</h1>
       <div class="notice">Mohon tunggu.</div>
     </section>`;
 
   try{
-    const rows=await rpc("mvp_customer_preview_member_gift",{
+    const previewRows=await rpc("mvp_customer_preview_gift",{
       p_session_token:session.session_token,
       p_code:code
     });
-    const gift=rows&&rows[0]?rows[0]:null;
+    const gift=previewRows&&previewRows[0]?previewRows[0]:null;
 
     if(!gift){
-      throw new Error("Gift Voucher tidak ditemukan.");
+      throw new Error("Gift tidak ditemukan.");
     }
 
     if(gift.claim_allowed===false){
       target.innerHTML=`
         <section class="card">
           ${brandMiniHtml()}
-          <h1>Gift Voucher Tidak Bisa Diclaim</h1>
-          <div class="error">${esc(gift.error_message||"Voucher tidak tersedia.")}</div>
-          <button class="full" style="margin-top:12px" onclick="setHash('customer-portal')">Kembali ke Customer Portal</button>
+          <h1>Gift Tidak Bisa Diclaim</h1>
+          <div class="error">
+            ${esc(gift.error_message||"Gift tidak tersedia.")}
+          </div>
+          <button class="full" style="margin-top:12px"
+            onclick="setHash('customer-portal')">
+            Kembali ke Customer Portal
+          </button>
         </section>`;
       return;
     }
@@ -1706,10 +1759,11 @@ async function renderClaimGift(){
     target.innerHTML=`
       <section class="card">
         ${brandMiniHtml()}
+
         <div class="gift-hero">
           <div class="gift-icon">🎁</div>
           <h1>${esc(gift.campaign_name||"Gift dari CACAYO")}</h1>
-          <p>Gift khusus untuk akun <b>${esc(gift.member_name||"Member")}</b></p>
+          <p>Gift untuk existing member CACAYO.</p>
         </div>
 
         <div class="gift-value-card">
@@ -1721,53 +1775,74 @@ async function renderClaimGift(){
           <div class="title">Gift Code</div>
           <div class="meta">${esc(gift.code||code)}</div>
         </div>
+
         <div class="item">
-          <div class="title">Voucher berlaku sampai</div>
+          <div class="title">Gift berlaku sampai</div>
           <div class="meta">${dateID(gift.expired_at)}</div>
         </div>
+
+        <div class="item">
+          <div class="title">Saldo sekarang</div>
+          <div class="meta">${money(gift.current_balance||0)}</div>
+        </div>
+
         <div class="item">
           <div class="title">Saldo setelah claim</div>
-          <div class="meta">${money(Number(gift.current_balance||0)+Number(gift.value||0))}</div>
+          <div class="meta">
+            ${money(
+              Number(gift.current_balance||0)+Number(gift.value||0)
+            )}
+          </div>
         </div>
+
         <div class="item">
           <div class="title">Masa aktif total saldo setelah claim</div>
           <div class="meta">${dateID(gift.result_expiry)}</div>
         </div>
 
         <div class="notice">
-          Gift hanya bisa diclaim 1x dan hanya oleh akun member yang dituju.
+          Gift hanya dapat diclaim satu kali. Setelah kamu klik CLAIM / OK,
+          saldo akan langsung masuk ke akunmu.
         </div>
 
-        <button class="full" style="margin-top:14px" id="claim-gift-confirm-btn">
-          Claim ${money(gift.value||0)}
+        <button class="full" style="margin-top:14px"
+          id="confirm-gift-claim-btn">
+          CLAIM / OK
         </button>
+
         <div id="claim-gift-result" style="margin-top:12px"></div>
       </section>`;
 
-    byId("claim-gift-confirm-btn").onclick=async()=>{
-      const button=byId("claim-gift-confirm-btn");
+    byId("confirm-gift-claim-btn").onclick=async()=>{
+      const button=byId("confirm-gift-claim-btn");
       const box=byId("claim-gift-result");
+
       button.disabled=true;
       button.textContent="CLAIMING...";
-      box.innerHTML=`<div class="notice">Menambahkan gift ke saldo...</div>`;
+      box.innerHTML=
+        `<div class="notice">Menambahkan gift ke saldo...</div>`;
 
       try{
-        const claimRows=await rpc("mvp_customer_claim_member_gift",{
+        const claimRows=await rpc("mvp_customer_claim_gift",{
           p_session_token:session.session_token,
           p_code:code
         });
         const result=claimRows&&claimRows[0]?claimRows[0]:{};
 
         if(result.claim_success===false){
-          box.innerHTML=`<div class="error">${esc(result.error_message||"Gift gagal diclaim.")}</div>`;
+          box.innerHTML=`
+            <div class="error">
+              ${esc(result.error_message||"Gift gagal diclaim.")}
+            </div>`;
           button.disabled=false;
-          button.textContent=`Claim ${money(gift.value||0)}`;
+          button.textContent="CLAIM / OK";
           return;
         }
 
         target.innerHTML=`
           <section class="card">
             ${brandMiniHtml()}
+
             <div class="customer-home-header">
               <div class="check">✓</div>
               <h1>Gift Berhasil Diclaim</h1>
@@ -1785,26 +1860,31 @@ async function renderClaimGift(){
             </div>
 
             <div class="success" style="margin-top:12px">
-              Seluruh saldo berlaku sampai <b>${dateID(result.new_expiry)}</b>.
+              Seluruh saldo berlaku sampai
+              <b>${dateID(result.new_expiry)}</b>.
             </div>
 
-            <button class="full" style="margin-top:14px" onclick="setHash('customer-portal')">
+            <button class="full" style="margin-top:14px"
+              onclick="setHash('customer-portal')">
               Kembali ke Customer Portal
             </button>
           </section>`;
       }catch(err){
         box.innerHTML=`<div class="error">${safeError(err)}</div>`;
         button.disabled=false;
-        button.textContent=`Claim ${money(gift.value||0)}`;
+        button.textContent="CLAIM / OK";
       }
     };
   }catch(err){
     target.innerHTML=`
       <section class="card">
         ${brandMiniHtml()}
-        <h1>Claim Gift Voucher</h1>
+        <h1>Claim Gift</h1>
         <div class="error">${safeError(err)}</div>
-        <button class="full" style="margin-top:12px" onclick="setHash('customer-portal')">Kembali</button>
+        <button class="full" style="margin-top:12px"
+          onclick="setHash('customer-portal')">
+          Kembali
+        </button>
       </section>`;
   }
 }

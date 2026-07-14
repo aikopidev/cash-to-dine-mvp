@@ -14,7 +14,7 @@ window.__CTD_BOOT_OK = false;
           '</div>' +
           '<h1>Staff Portal Gagal Dimuat</h1>' +
           '<div class="error">' + String(message || "File aplikasi tidak berhasil dimuat.") + '</div>' +
-          '<p>Refresh halaman atau pastikan deployment menggunakan v3.2.0.</p>' +
+          '<p>Refresh halaman atau pastikan deployment menggunakan v3.2.1.</p>' +
           '<button class="full" onclick="location.reload()">Refresh Halaman</button>' +
         '</section>' +
       '</main>';

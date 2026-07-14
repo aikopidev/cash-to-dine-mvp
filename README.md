@@ -362,13 +362,11 @@ Member Directory:
 - Required SQL: `cash-to-dine-v311-single-balance-expiry.sql`.
 
 
-## v3.2.0 Existing Member Gift Voucher
-- Owner can select an existing member, event, custom value, and expiry date.
-- Voucher is bound to the selected member.
-- Owner copies the voucher through the existing one-time Copy WA / Copy Link control.
-- Customer opens the link, logs in, previews the gift, and claims it.
-- Gift value is added directly to existing wallet balance.
-- Gift expiry never shortens an existing later expiry.
-- Another member cannot claim a forwarded link.
-- New-member registration rejects existing-member gift codes.
-- Required SQL: `cash-to-dine-v320-existing-member-gift.sql`.
+## v3.2.1 Generic Gift
+- Built directly from v3.1.2; obsolete target-member v3.2.0 application code is not included.
+- VOUCHER is for new-member registration.
+- GIFT is a generic one-time code for members who already existed when it was generated.
+- First eligible member to claim receives the Gift.
+- Gift adds wallet balance and never shortens a later expiry.
+- `Kirim via WhatsApp` opens WhatsApp with prepared text; without API the status is `WA OPENED`, not `SENT`.
+- SQL removes obsolete target-member database functions and columns if found.
