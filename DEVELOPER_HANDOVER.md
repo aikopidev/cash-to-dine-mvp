@@ -362,3 +362,15 @@ Member Directory:
 - Customer Portal and staff member detail show the same single expiry date.
 - Top-up amounts and package validity are server-controlled and read-only in UI.
 - Required SQL: `cash-to-dine-v311-single-balance-expiry.sql`.
+
+
+## v3.2.0 Existing Member Gift Voucher
+- Owner can select an existing member, event, custom value, and expiry date.
+- Voucher is bound to the selected member.
+- Owner copies the voucher through the existing one-time Copy WA / Copy Link control.
+- Customer opens the link, logs in, previews the gift, and claims it.
+- Gift value is added directly to existing wallet balance.
+- Gift expiry never shortens an existing later expiry.
+- Another member cannot claim a forwarded link.
+- New-member registration rejects existing-member gift codes.
+- Required SQL: `cash-to-dine-v320-existing-member-gift.sql`.
