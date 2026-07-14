@@ -58,3 +58,18 @@
 - CACAYO logo returns to the correct portal login screen.
 - Obsolete WhatsApp-open code was removed.
 - Required SQL for a fresh v3.2.x deployment: `cash-to-dine-v322-generic-gift.sql`.
+
+
+## v3.2.3 Customer PIN Disclaimer
+- Customer Portal displays a formal PIN security disclaimer below the balance card.
+- It explains that the PIN is the sole authorization for balance usage.
+- CACAYO and cashier staff cannot view the customer's PIN.
+- Loss caused by failure to protect the PIN is not CACAYO's responsibility.
+- Frontend-only update; no SQL migration required.
+
+
+## v3.2.4 Final PIN Disclaimer
+- Replaced the previous PIN notice with the approved final wording.
+- Clarifies PIN as the sole authorization for Dining balance usage.
+- Clarifies customer responsibility, valid PIN transactions, staff visibility limits, and system-error exception.
+- Frontend-only update; no SQL migration required.

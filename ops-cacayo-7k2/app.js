@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "3.2.2";
+const APP_VERSION = "3.2.4";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -1586,6 +1586,18 @@ async function renderCustomerPortal(){
         <div class="item"><div class="title">Member ID</div><div class="meta">${esc(c.member_code || "-")}</div></div>
         <div class="notice" style="margin-top:12px">Top up hanya bisa dilakukan di kasir CACAYO.</div>
         <button class="ghost full" style="margin-top:12px" id="customer-logout-btn">Logout</button>
+      </section>
+
+      <section class="card pin-disclaimer-card">
+        <div class="pin-disclaimer-title">Keamanan PIN</div>
+        <p class="pin-disclaimer-text">
+          PIN bersifat rahasia dan menjadi satu-satunya otorisasi untuk penggunaan saldo Dining.
+          Customer wajib menjaga kerahasiaan PIN dan tidak memberikannya kepada pihak lain.
+          Pihak kasir maupun restoran tidak dapat melihat PIN Customer.
+          Setiap transaksi dengan PIN yang benar dianggap sah.
+          Kehilangan saldo akibat kelalaian Customer dalam menjaga PIN
+          bukan tanggung jawab pihak restoran, kecuali disebabkan oleh kesalahan sistem.
+        </p>
       </section>
 
       <section class="card">

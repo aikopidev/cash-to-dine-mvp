@@ -1013,3 +1013,24 @@ input[readonly]{
   cursor:pointer;
   user-select:none;
 }
+
+
+/* v3.2.3 Customer PIN Disclaimer */
+.pin-disclaimer-card{
+  border:1px solid #f1c56c;
+  border-left:5px solid #c88719;
+  background:#fffaf0;
+}
+.pin-disclaimer-title{
+  margin-bottom:7px;
+  color:#7c4a03;
+  font-size:15px;
+  font-weight:1000;
+}
+.pin-disclaimer-text{
+  margin:0;
+  color:#4b3a1c;
+  font-size:14px;
+  font-weight:650;
+  line-height:1.65;
+}
