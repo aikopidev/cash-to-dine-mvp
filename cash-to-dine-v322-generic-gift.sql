@@ -1,5 +1,8 @@
--- Cash to Dine v3.2.1
+-- Cash to Dine v3.2.2
 -- GENERIC EXISTING-MEMBER GIFT
+-- UI revision: Copy WA only; no WhatsApp deep-link/API.
+-- Expiry rule: total wallet expiry is the later/longer of
+-- current wallet expiry and Gift expiry.
 --
 -- FINAL MODEL
 -- - VOUCHER: new-member registration only.
@@ -88,7 +91,7 @@ begin
 
   if cardinality(v_missing)>0 then
     raise exception
-      'CTD v3.2.1 stopped. Missing base objects: %',
+      'CTD v3.2.2 stopped. Missing base objects: %',
       array_to_string(v_missing,', ');
   end if;
 end

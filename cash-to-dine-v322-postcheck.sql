@@ -1,4 +1,4 @@
--- Cash to Dine v3.2.1 POST-CHECK
+-- Cash to Dine v3.2.2 POST-CHECK
 -- Run after cash-to-dine-v321-generic-gift.sql
 
 select
@@ -105,3 +105,17 @@ left join public.members m
   on m.id=g.used_by_member_id
 order by g.created_at desc
 limit 30;
+
+
+select
+  'Gift uses longest expiry' as check_name,
+  case when position(
+    'greatest('
+    in lower(
+      pg_get_functiondef(
+        to_regprocedure(
+          'public.mvp_customer_claim_gift(text,text)'
+        )
+      )
+    )
+  )>0 then 'OK' else 'CHECK FAILED' end as result;

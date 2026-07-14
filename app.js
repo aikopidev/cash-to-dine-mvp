@@ -1,5 +1,5 @@
 /* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "3.2.1";
+const APP_VERSION = "3.2.2";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -15,7 +15,15 @@ function parseMoney(v){ return typeof v === "number" ? v : (Number(String(v||"")
 function byId(id){ return document.getElementById(id); }
 function esc(value){ return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch])); }
 function safeError(err){ return esc(err && err.message ? err.message : err); }
-function brandMiniHtml(){ return `<div class="mini-brand"><img src="./cacayo-logo.jpg" alt="CACAYO logo"/><div><b>CACAYO</b><span>CHINESE CALIFORNIAN FUSION FOOD</span></div></div>`; }
+function goPortalLogin(){
+  setHash(PORTAL_MODE==="staff" ? "login" : "customer-login");
+}
+function brandMiniHtml(){
+  const label=PORTAL_MODE==="staff"
+    ? "Kembali ke login staff"
+    : "Kembali ke login customer";
+  return `<button type="button" class="mini-brand brand-home-button" onclick="goPortalLogin()" aria-label="${label}"><img src="./cacayo-logo.jpg" alt="CACAYO logo"/><div><b>CACAYO</b><span>CHINESE CALIFORNIAN FUSION FOOD</span></div></button>`;
+}
 function brandLine(){ return OUTLET_FULL; }
 function randomCode(len=8){ let c=""; for(let i=0;i<len;i++) c += SAFE_ALPHABET[Math.floor(Math.random()*SAFE_ALPHABET.length)]; return c; }
 function memberSeq(){ return "CTD-" + Date.now().toString().slice(-6); }
@@ -52,6 +60,16 @@ async function rpc(fn, body={}){
 function mountLayout(){
   byId("app").innerHTML = byId("layout-template").innerHTML;
   byId("outlet-name").textContent = `${OUTLET_FULL} • Supabase v${APP_VERSION}`;
+  const brandHome=byId("brand-home-link");
+  if(brandHome){
+    brandHome.onclick=goPortalLogin;
+    brandHome.onkeydown=(event)=>{
+      if(event.key==="Enter"||event.key===" "){
+        event.preventDefault();
+        goPortalLogin();
+      }
+    };
+  }
   byId("logout-btn").onclick = async()=>{
     const u=currentUser();
     try{ if(u?.session_token) await rpc("s3_staff_logout",{p_staff_session_token:u.session_token}); }catch(e){}
@@ -1048,11 +1066,8 @@ Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
   function copiedStatusHtml(row){
     if(!row.copied_at)return "";
 
-    const type=normalizedCodeType(row.code_type);
     const method=String(row.copied_method||"").toLowerCase();
-    const label=type==="gift"&&method==="wa"
-      ? "WA OPENED"
-      : `COPIED ${method.toUpperCase()||""}`.trim();
+    const label=`COPIED ${method.toUpperCase()||""}`.trim();
 
     return `
       <div class="meta copied-meta">
@@ -1091,16 +1106,14 @@ Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
 
       if(isAvailable){
         if(isCopied){
-          const copiedLabel=type==="gift"&&row.copied_method==="wa"
-            ? "✓ WA OPENED"
-            : "✓ COPIED";
+          const copiedLabel="✓ COPIED";
 
           actions=`
             <div class="voucher-actions copied-actions">
               <span class="copied-badge">${copiedLabel}</span>
             </div>`;
         }else{
-          const waLabel=type==="gift"?"Kirim via WhatsApp":"Copy WA";
+          const waLabel="Copy WA";
 
           actions=`
             <div class="voucher-actions">
@@ -1198,28 +1211,13 @@ Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
   window.shareCampaignCode=async(giftId,method,type,button)=>{
     if(!giftId||!["wa","link"].includes(method))return;
 
-    const normalizedType=normalizedCodeType(type);
-    const shouldOpenWhatsApp=normalizedType==="gift"&&method==="wa";
-    const waWindow=shouldOpenWhatsApp
-      ? window.open("about:blank","_blank")
-      : null;
-
-    if(waWindow){
-      try{waWindow.opener=null;}catch(e){}
-    }
-
     const rowElement=button?button.closest(".voucher-row"):null;
     const rowButtons=rowElement
       ? Array.from(rowElement.querySelectorAll("button"))
       : [];
 
     rowButtons.forEach(btn=>btn.disabled=true);
-
-    if(button){
-      button.textContent=shouldOpenWhatsApp
-        ? "OPENING WA..."
-        : "COPYING...";
-    }
+    if(button)button.textContent="COPYING...";
 
     try{
       const rows=await rpc("s3_copy_gift_code",{
@@ -1230,48 +1228,31 @@ Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
       const result=rows&&rows[0]?rows[0]:{};
 
       if(result.copy_allowed===false){
-        if(waWindow)waWindow.close();
         alert(result.error_message||"Kode sudah pernah dibagikan.");
         await loadCodes();
         return;
       }
 
-      const message=waMessageFor(result);
-      const link=codeLink(result);
+      const text=method==="wa"
+        ? waMessageFor(result)
+        : codeLink(result);
 
-      if(shouldOpenWhatsApp){
-        const waUrl=`https://wa.me/?text=${encodeURIComponent(message)}`;
+      const copied=await copyWithFallback(text);
 
-        if(waWindow){
-          waWindow.location.href=waUrl;
-        }else{
-          await copyWithFallback(message);
-          alert(
-            "WhatsApp popup diblokir browser. Pesan sudah disiapkan di clipboard."
-          );
-        }
-      }else{
-        const text=method==="wa"?message:link;
-        const copied=await copyWithFallback(text);
-
-        if(copied){
-          alert(
-            `${method==="wa"?"Pesan WhatsApp":"Link"} ${result.code} berhasil dicopy.`
-          );
-        }
+      if(copied){
+        alert(
+          `${method==="wa"?"Pesan WhatsApp":"Link"} ${result.code} berhasil dicopy.`
+        );
       }
 
       await loadCodes();
     }catch(err){
-      if(waWindow)waWindow.close();
       rowButtons.forEach(btn=>btn.disabled=false);
 
       if(button){
-        button.textContent=shouldOpenWhatsApp
-          ? "Kirim via WhatsApp"
-          : method==="wa"
-            ? "Copy WA"
-            : "Copy Link";
+        button.textContent=method==="wa"
+          ? "Copy WA"
+          : "Copy Link";
       }
 
       alert(safeError(err));
@@ -1360,7 +1341,7 @@ Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
         </div>
         <div class="notice" style="margin-top:10px">
           ${type==="gift"
-            ? "Klik Kirim via WhatsApp pada masing-masing Gift. WhatsApp akan terbuka dengan pesan yang sudah siap."
+            ? "Klik Copy WA pada masing-masing Gift, lalu paste dan kirim manual ke customer."
             : "Copy pesan atau link masing-masing Voucher untuk dikirim ke calon member."}
         </div>`;
 
@@ -1802,7 +1783,8 @@ async function renderClaimGift(){
 
         <div class="notice">
           Gift hanya dapat diclaim satu kali. Setelah kamu klik CLAIM / OK,
-          saldo akan langsung masuk ke akunmu.
+          saldo akan langsung masuk ke akunmu. Masa aktif total saldo mengikuti
+          tanggal yang paling panjang antara saldo lama dan Gift.
         </div>
 
         <button class="full" style="margin-top:14px"

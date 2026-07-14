@@ -50,3 +50,11 @@
 - Gift adds wallet balance and never shortens a later expiry.
 - `Kirim via WhatsApp` opens WhatsApp with prepared text; without API the status is `WA OPENED`, not `SENT`.
 - SQL removes obsolete target-member database functions and columns if found.
+
+
+## v3.2.2 Revisions
+- GIFT uses Copy WA only; no WhatsApp deep-link or API.
+- Gift claim keeps the longest expiry between current wallet expiry and Gift expiry.
+- CACAYO logo returns to the correct portal login screen.
+- Obsolete WhatsApp-open code was removed.
+- Required SQL for a fresh v3.2.x deployment: `cash-to-dine-v322-generic-gift.sql`.

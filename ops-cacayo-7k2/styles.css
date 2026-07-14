@@ -986,3 +986,30 @@ input[readonly]{
 @media(max-width:640px){
   .claim-code-row{grid-template-columns:1fr}
 }
+
+
+/* v3.2.2 Clickable CACAYO brand */
+.brand-home-button{
+  width:100%;
+  border:0;
+  padding:0;
+  background:transparent;
+  color:inherit;
+  text-align:left;
+  cursor:pointer;
+  font:inherit;
+}
+.brand-home-button:hover,
+.brand-home-link:hover{
+  opacity:.82;
+}
+.brand-home-button:focus-visible,
+.brand-home-link:focus-visible{
+  outline:3px solid rgba(37,99,235,.35);
+  outline-offset:4px;
+  border-radius:12px;
+}
+.brand-home-link{
+  cursor:pointer;
+  user-select:none;
+}
