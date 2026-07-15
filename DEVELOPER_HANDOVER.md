@@ -403,3 +403,13 @@ Member Directory:
 - Transaction search accepts 2 or more characters.
 - Name searches no longer create an invalid phone prefill.
 - Run `cacayo-member-system-v401-search-fix.sql` after the v4.0.0 database migration.
+
+
+## v4.1.0 Gift Item
+- Master Gift Item with photo and reusable item definition.
+- Batch generation of unique item codes.
+- Visual customer cards with ED and countdown.
+- Secure QR + customer PIN redemption.
+- Item claim/use included in customer, member, and daily history.
+- Wallet, Gift, Voucher, and Item expiry use Jakarta date with 23:59:59 cut-off.
+- Run `cacayo-member-system-v410-gift-item.sql`.

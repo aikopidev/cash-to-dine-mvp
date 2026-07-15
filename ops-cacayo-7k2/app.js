@@ -1,5 +1,5 @@
 /* White-label Member Dining System */
-const APP_VERSION = "4.0.1";
+const APP_VERSION = "4.1.0";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -37,7 +37,7 @@ function staffPageHeader(title,backRoute=staffHomeRoute(),subtitle=""){
   </div>`;
 }
 function touchIcon(name){
-  const icons={transaction:"▣",history:"◷",members:"♙",promo:"▧",voucher:"◇",summary:"▤",use:"▱",topup:"⊕",search:"⌕"};
+  const icons={transaction:"▣",history:"◷",members:"♙",promo:"▧",voucher:"◇",summary:"▤",use:"▱",topup:"⊕",item:"▦",search:"⌕"};
   return icons[name]||"•";
 }
 function brandLine(){ return OUTLET_FULL; }
@@ -68,6 +68,43 @@ function memberMatchesSearch(member,query){
   const memberPhone=localPhoneKey(member?.phone||"");
 
   return queryPhone.length>=2 && memberPhone.includes(queryPhone);
+}
+
+function giftItemCountdown(days){
+  const n=Number(days);
+  if(!Number.isFinite(n))return "";
+  if(n<0)return "Expired";
+  if(n===0)return "Hari terakhir";
+  if(n===1)return "1 hari lagi";
+  return `${n} hari lagi`;
+}
+function giftItemStatusLabel(status){
+  const s=String(status||"").toLowerCase();
+  if(s==="available")return "Tersedia";
+  if(s==="redeemed")return "Sudah digunakan";
+  if(s==="expired")return "Expired";
+  return s.toUpperCase();
+}
+function customerGiftItemCardsHtml(rows){
+  const items=rows||[];
+  if(!items.length)return `<div class="empty-state">Belum ada Gift Item.</div>`;
+  return `<div class="customer-gift-item-grid">${items.map(item=>`
+    <article class="customer-gift-item-card ${esc(item.status||"")}">
+      <div class="gift-item-image-wrap">
+        ${item.image_data_url
+          ? `<img src="${item.image_data_url}" alt="${esc(item.item_name||"Gift Item")}"/>`
+          : `<div class="gift-item-image-placeholder">${touchIcon("item")}</div>`}
+        <span class="gift-item-status">${esc(giftItemStatusLabel(item.status))}</span>
+      </div>
+      <div class="gift-item-card-body">
+        <h3>${esc(item.item_name||"Gift Item")}</h3>
+        ${item.item_description?`<p>${esc(item.item_description)}</p>`:""}
+        <div class="gift-item-expiry">
+          <b>Gunakan sebelum ${dateID(item.expires_at)}</b>
+          <span>${esc(giftItemCountdown(item.days_remaining))}</span>
+        </div>
+      </div>
+    </article>`).join("")}</div>`;
 }
 function saveSession(u){ sessionStorage.setItem(SESSION_KEY, JSON.stringify(u)); }
 function getSession(){ try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||"null");}catch(e){return null;} }
@@ -132,7 +169,7 @@ function setNav(){
 function staffHomeHtml(user){
   const ownerTools=user.role==="owner" ? `
     <div class="secondary-tools">
-      <button class="secondary-tool" onclick="setHash('gift-generate')"><span>${touchIcon('voucher')}</span><b>Voucher & Gift</b></button>
+      <button class="secondary-tool" onclick="setHash('gift-generate')"><span>${touchIcon('voucher')}</span><b>Voucher & Gift Item</b></button>
       <button class="secondary-tool" onclick="setHash('owner-summary')"><span>${touchIcon('summary')}</span><b>Ringkasan</b></button>
     </div>` : "";
   return `
@@ -143,7 +180,7 @@ function staffHomeHtml(user){
       <div class="touch-menu three">
         <button class="touch-menu-card primary" onclick="setHash('transaction')">
           <span class="touch-menu-icon">${touchIcon('transaction')}</span>
-          <b>Transaksi</b><small>Gunakan Saldo / Top Up</small>
+          <b>Transaksi</b><small>Saldo / Top Up / Gift Item</small>
         </button>
         <button class="touch-menu-card" onclick="setHash('report')">
           <span class="touch-menu-icon">${touchIcon('history')}</span>
@@ -204,12 +241,15 @@ async function renderTransaction(){
   screen(`
     <section class="tablet-page">
       ${staffPageHeader("Transaksi",staffHomeRoute(),"Pilih jenis transaksi lalu cari member")}
-      <div class="transaction-choice">
+      <div class="transaction-choice three">
         <button class="transaction-choice-card active" data-action="use">
           <span>${touchIcon('use')}</span><b>Gunakan Saldo</b>
         </button>
         <button class="transaction-choice-card" data-action="topup">
           <span>${touchIcon('topup')}</span><b>Top Up</b>
+        </button>
+        <button class="transaction-choice-card" data-action="item">
+          <span>${touchIcon('item')}</span><b>Gunakan Gift Item</b>
         </button>
       </div>
       <section class="surface-card member-picker-card">
@@ -226,6 +266,7 @@ async function renderTransaction(){
       button.classList.add("active");
       selectedAction=button.dataset.action||"use";
       byId("transaction-member-search").focus();
+      if(byId("transaction-member-search").value.trim().length>=2)search();
     };
   });
   const input=byId("transaction-member-search");
@@ -253,7 +294,7 @@ async function renderTransaction(){
         return;
       }
       results.innerHTML=rows.map(member=>`
-        <button class="member-touch-row" type="button" onclick="setHash('${selectedAction==='topup'?'topup':'use-balance'}',{phone:'${esc(member.phone)}'})">
+        <button class="member-touch-row" type="button" onclick="setHash('${selectedAction==='topup'?'topup':selectedAction==='item'?'member':'use-balance'}',{phone:'${esc(member.phone)}',action:'${selectedAction}'})">
           <span class="member-avatar">${esc(String(member.name||'?').charAt(0).toUpperCase())}</span>
           <span class="member-touch-main"><b>${esc(member.name)}</b><small>${esc(member.phone)} • ${String(member.status||'active').toUpperCase()}</small></span>
           <span class="member-touch-balance"><small>Saldo</small><b>${money(member.balance)}</b></span><span class="chevron">›</span>
@@ -276,7 +317,15 @@ function historyListHtml(rows, emptyText="Belum ada transaksi."){
     const after = Number(t.balance_after || 0);
     const title = t.type === "use_balance"
       ? "Pakai Saldo"
-      : (t.type === "topup" ? "Top Up di Kasir" : (t.type === "gift_claim" ? "Voucher / Gift" : "Transaksi"));
+      : t.type === "topup"
+        ? "Top Up di Kasir"
+        : t.type === "gift_claim"
+          ? "Voucher / Gift Saldo"
+          : t.type === "gift_item_claim"
+            ? "Gift Item Diterima"
+            : t.type === "gift_item_redeem"
+              ? "Gift Item Digunakan"
+              : "Transaksi";
     return `
       <div class="history-item">
         <div class="history-head">
@@ -378,6 +427,8 @@ async function renderMember(){
     let historyError = "";
     let expiryInfo = {};
     let expiryError = "";
+    let giftItemRows = [];
+    let giftItemError = "";
     try{
       historyRows = await rpc("s3_staff_member_history", {p_staff_session_token:u.session_token, p_member_id:m.member_id});
       historyRows = historyRows || [];
@@ -392,6 +443,15 @@ async function renderMember(){
       expiryInfo = expiryRows&&expiryRows[0] ? expiryRows[0] : {};
     }catch(e){
       expiryError = e.message;
+    }
+    try{
+      giftItemRows = await rpc("s4_staff_member_gift_items", {
+        p_staff_session_token:u.session_token,
+        p_member_id:m.member_id
+      });
+      giftItemRows = giftItemRows || [];
+    }catch(e){
+      giftItemError = e.message;
     }
 
     const isBlocked = String(m.status || "").toLowerCase() === "blocked";
@@ -420,9 +480,10 @@ async function renderMember(){
         <div class="divider"></div>
         <div class="kpi"><div class="label">Saldo Dining</div><div class="value">${money(m.balance)}</div></div>
         ${isBlocked ? `<div class="error" style="margin-top:12px">${customerBlockedMessage()}</div>` : `
-        <div class="grid two" style="margin-top:12px">
+        <div class="grid three member-action-grid" style="margin-top:12px">
           <button onclick="setHash('topup',{phone:'${esc(m.phone)}'})">Top Up Saldo</button>
           <button class="secondary" onclick="setHash('use-balance',{phone:'${esc(m.phone)}'})">Gunakan Saldo</button>
+          <button class="ghost" onclick="document.getElementById('member-gift-items-card')?.scrollIntoView({behavior:'smooth'})">Gift Item</button>
         </div>`}
       </section>
       <section class="card">
@@ -435,6 +496,34 @@ async function renderMember(){
         <p>Seluruh saldo member menggunakan satu tanggal expired.</p>
         ${expiryError ? `<div class="error">${esc(expiryError)}</div>` : singleBalanceExpiryHtml(expiryInfo)}
       </section>
+
+      <section class="card" id="member-gift-items-card">
+        <h2>Gift Item Member</h2>
+        <p>Pilih item yang akan digunakan. Customer harus scan QR dan approve menggunakan PIN.</p>
+        ${giftItemError
+          ? `<div class="error">${esc(giftItemError)}</div>`
+          : giftItemRows.length
+            ? `<div class="staff-gift-item-grid">${giftItemRows.map(item=>`
+                <article class="staff-gift-item-card ${esc(item.status||"")}">
+                  <div class="staff-gift-item-image">
+                    ${item.image_data_url
+                      ? `<img src="${item.image_data_url}" alt="${esc(item.item_name||"Gift Item")}"/>`
+                      : `<div class="gift-item-image-placeholder">${touchIcon("item")}</div>`}
+                  </div>
+                  <div class="staff-gift-item-info">
+                    <h3>${esc(item.item_name||"Gift Item")}</h3>
+                    ${item.item_description?`<p>${esc(item.item_description)}</p>`:""}
+                    <small>ED ${dateID(item.expires_at)} • ${esc(giftItemCountdown(item.days_remaining))}</small>
+                    <span class="badge ${item.status==="available"?"ok":""}">${esc(giftItemStatusLabel(item.status))}</span>
+                    ${item.status==="available"&&!isBlocked
+                      ? `<button class="full touch-button" onclick="window.startGiftItemRedemption('${item.member_gift_item_id}')">Gunakan Item</button>`
+                      : ""}
+                  </div>
+                </article>`).join("")}</div>`
+            : `<div class="empty-state">Member belum memiliki Gift Item.</div>`}
+        <div id="gift-item-redemption-result" style="margin-top:12px"></div>
+      </section>
+
       <section class="card">
         <h2>Riwayat Transaksi Customer</h2>
         <p>Kasir dan owner bisa melihat history saldo customer. Detail pembayaran POS tidak dicatat di sistem ini.</p>
@@ -443,6 +532,29 @@ async function renderMember(){
       ${resetControls}
       ${ownerDelete}
     `);
+
+    window.startGiftItemRedemption=async(memberGiftItemId)=>{
+      const box=byId("gift-item-redemption-result");
+      box.innerHTML=`<div class="notice">Membuat approval Gift Item...</div>`;
+      try{
+        const rows=await rpc("s4_create_item_redemption",{
+          p_staff_session_token:u.session_token,
+          p_member_gift_item_id:memberGiftItemId
+        });
+        const result=rows&&rows[0]?rows[0]:{};
+        const link=`${publicBaseUrl()}#approve-item?token=${result.token}`;
+        box.innerHTML=`
+          <div class="success"><b>Approval Gift Item Siap ✅</b><br>${esc(result.item_name||"Gift Item")}<br>Customer scan QR dan masukkan PIN.</div>
+          <div class="qr-wrap">
+            <img class="qr-img" src="${qrImageUrl(link)}" alt="QR Gift Item"/>
+            <div class="meta">Link berlaku 15 menit.</div>
+          </div>
+          <textarea class="copy-area" readonly>${link}</textarea>
+          <button class="secondary full" onclick="navigator.clipboard.writeText('${link}').then(()=>alert('Link copied'))">Copy Approval Link</button>`;
+      }catch(err){
+        box.innerHTML=`<div class="error">${safeError(err)}</div>`;
+      }
+    };
 
     byId("reset-pin-btn").onclick = async ()=>{
       const box = byId("staff-action-result");
@@ -469,6 +581,10 @@ async function renderMember(){
         box.innerHTML = `<div class="error">${safeError(err)}</div>`;
       }
     };
+
+    if(params.action==="item"){
+      setTimeout(()=>document.getElementById("member-gift-items-card")?.scrollIntoView({behavior:"smooth",block:"start"}),120);
+    }
 
     if(u.role === "owner"){
       byId("delete-member-btn").onclick = async ()=>{
@@ -811,6 +927,89 @@ async function renderApprove(){
   }catch(err){target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div></section>`;}
 }
 
+
+async function renderApproveItem(){
+  const {params}=getRoute();
+  const token=params.token;
+  byId("app").innerHTML=`<main class="customer-shell"></main>`;
+  const target=document.querySelector("main");
+  target.innerHTML=`<div class="empty-state">Memuat Gift Item...</div>`;
+
+  try{
+    const rows=await rpc("mvp_get_item_redemption",{p_token:token});
+    if(!rows||!rows.length)throw new Error("Approval Gift Item tidak ditemukan.");
+    const request=rows[0];
+    if(request.request_status!=="waiting")throw new Error(`Approval sudah ${request.request_status}.`);
+    let pin="";
+
+    target.innerHTML=`<section class="customer-confirm-card">
+      ${brandMiniHtml()}
+      <h1>Gunakan Gift Item</h1>
+      <div class="reward-item-preview compact">
+        ${request.item_image_data_url?`<img src="${request.item_image_data_url}" alt="${esc(request.item_name||"Gift Item")}"/>`:""}
+        <h2>${esc(request.item_name||"Gift Item")}</h2>
+        <p>${esc(request.item_description||"")}</p>
+        <div class="gift-item-expiry"><b>ED ${dateID(request.item_expires_at)}</b><span>${esc(giftItemCountdown(request.days_remaining))}</span></div>
+      </div>
+      <p>Masukkan PIN Anda</p>
+      <div class="pin-dots" id="item-pin-dots">${Array.from({length:6},()=>'<i></i>').join('')}</div>
+      <div class="numeric-keypad" aria-label="Keypad PIN">
+        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" data-item-pin="${n}">${n}</button>`).join('')}
+        <button type="button" class="item-key-clear">C</button>
+        <button type="button" data-item-pin="0">0</button>
+        <button type="button" class="item-key-back">⌫</button>
+      </div>
+      <button class="full touch-button" id="approve-item-button" disabled>Gunakan Item</button>
+      <button class="text-button" id="reject-item-button">Batalkan</button>
+      <div id="approve-item-result"></div>
+    </section>`;
+
+    const dots=()=>document.querySelectorAll("#item-pin-dots i").forEach((dot,index)=>dot.classList.toggle("filled",index<pin.length));
+    document.querySelectorAll("[data-item-pin]").forEach(button=>button.onclick=()=>{
+      if(pin.length<6){
+        pin+=button.dataset.itemPin;
+        dots();
+        byId("approve-item-button").disabled=pin.length!==6;
+      }
+    });
+    document.querySelector(".item-key-clear").onclick=()=>{pin="";dots();byId("approve-item-button").disabled=true;};
+    document.querySelector(".item-key-back").onclick=()=>{pin=pin.slice(0,-1);dots();byId("approve-item-button").disabled=pin.length!==6;};
+    byId("reject-item-button").onclick=async()=>{
+      try{
+        await rpc("mvp_reject_item_redemption",{p_token:token});
+        byId("approve-item-result").innerHTML=`<div class="error">Penggunaan item dibatalkan.</div>`;
+      }catch(err){byId("approve-item-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}
+    };
+    byId("approve-item-button").onclick=async()=>{
+      const box=byId("approve-item-result");
+      const approveButton=byId("approve-item-button");
+      approveButton.disabled=true;
+      box.innerHTML=`<div class="notice">Memproses...</div>`;
+      try{
+        const resultRows=await rpc("mvp_approve_item_redemption",{
+          p_token:token,
+          p_password:pin
+        });
+        const result=resultRows&&resultRows[0]?resultRows[0]:{};
+        if(result.approval_success===false){
+          box.innerHTML=`<div class="error">${esc(result.error_message||"PIN salah.")}</div>`;
+          pin="";
+          dots();
+          return;
+        }
+        target.innerHTML=`<section class="customer-confirm-card success-transition">${brandMiniHtml()}<div class="success-check">✓</div><h1>Gift Item Berhasil Digunakan</h1><h2>${esc(request.item_name||"Gift Item")}</h2></section>`;
+        setTimeout(()=>setHash("promo",{token,kind:"item"}),900);
+      }catch(err){
+        box.innerHTML=`<div class="error">${safeError(err)}</div>`;
+        pin="";
+        dots();
+      }
+    };
+  }catch(err){
+    target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div></section>`;
+  }
+}
+
 async function renderSuccess(){
   const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); try{ const rows=await rpc("mvp_get_approval",{p_token:params.token}); const p=rows&&rows[0]; if(!p) throw new Error("Approval not found"); screen(`<section class="card"><h1>Saldo Berhasil Dipakai ✅</h1><div class="item"><div class="title">Member</div><div class="meta">${esc(p.member_name)} • ${esc(p.member_phone)}</div></div><div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div><div class="item"><div class="title">Saldo Sisa</div><div class="meta">${money(p.balance_after)}</div></div><div class="notice">Kasir tetap validasi manual di POS: masukkan payment Voucher/Member Dining sebesar ${money(p.balance_used)}. Sisa bill, kalau ada, dibayar QRIS/Cash/Card di POS.</div><button class="full" style="margin-top:12px" onclick="setHash('kasir')">Transaksi Baru</button></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`); }
 }
@@ -839,9 +1038,9 @@ async function renderOwnerSummary(){
 }
 
 async function renderGiftGenerate(){
-  const u=requireLogin();
-  if(!u)return;
-  if(u.role!=="owner"){setHash("kasir");return;}
+  const user=requireLogin();
+  if(!user)return;
+  if(user.role!=="owner"){setHash("kasir");return;}
 
   mountLayout();
   setNav("gift");
@@ -851,144 +1050,176 @@ async function renderGiftGenerate(){
     .slice(0,10);
 
   screen(`
-    <section class="card generate-code-card">
-      <h1>Generate Voucher / Gift</h1>
-      <p>Pilih jenis kode sesuai tujuan. Satu kode hanya dapat digunakan satu kali.</p>
+    <section class="tablet-page">
+      ${staffPageHeader("Voucher & Gift",staffHomeRoute(),"Saldo dan Gift Item")}
 
-      <form id="campaign-code-form">
-        <label>Jenis Kode</label>
-        <select id="code-type">
-          <option value="voucher">VOUCHER — New Member</option>
-          <option value="gift">GIFT — Existing Member</option>
-        </select>
+      <div class="gift-admin-tabs">
+        <button class="active" data-gift-tab="balance">Voucher / Gift Saldo</button>
+        <button data-gift-tab="item">Gift Item</button>
+      </div>
 
-        <div id="code-type-help" class="type-help"></div>
+      <div id="gift-balance-panel">
+        <section class="surface-card generate-code-card">
+          <h2>Generate Voucher / Gift Saldo</h2>
+          <form id="campaign-code-form">
+            <label>Jenis Kode</label>
+            <select id="code-type">
+              <option value="voucher">VOUCHER — New Member</option>
+              <option value="gift">GIFT SALDO — Existing Member</option>
+            </select>
+            <div id="code-type-help" class="type-help"></div>
+            <label>Campaign / Event</label>
+            <input id="campaign" value="Soft Opening CACAYO" required/>
+            <div class="grid two">
+              <div><label>Jumlah Kode</label><input id="qty" inputmode="numeric" value="5" required/></div>
+              <div><label>Nominal per Kode</label><input id="value" inputmode="numeric" value="100000" required/></div>
+            </div>
+            <label>Expired Date</label>
+            <input id="expired" type="date" value="${defaultExpiry}" required/>
+            <button class="full touch-button" id="generate-code-btn" style="margin-top:14px">Generate Voucher</button>
+          </form>
+          <div id="gift-result" style="margin-top:12px"></div>
+        </section>
+      </div>
 
-        <label>Campaign / Event</label>
-        <input id="campaign" value="Soft Opening CACAYO" required/>
+      <div id="gift-item-panel" hidden>
+        <div class="gift-item-admin-layout">
+          <section class="surface-card">
+            <h2>Master Gift Item</h2>
+            <p>Buat item satu kali, lalu generate kode sesuai jumlah yang dibutuhkan.</p>
+            <form id="gift-item-master-form">
+              <input id="gift-item-id" type="hidden"/>
+              <label>Nama Item</label>
+              <input id="gift-item-name" maxlength="100" placeholder="Contoh: Mie Ayam" required/>
+              <label>Deskripsi Singkat</label>
+              <textarea id="gift-item-description" maxlength="240" placeholder="Contoh: 1 porsi Mie Ayam Original"></textarea>
+              <label>Foto Item</label>
+              <input id="gift-item-file" type="file" accept="image/jpeg,image/png,image/webp"/>
+              <small>Foto otomatis dipotong menjadi 800 × 800 px.</small>
+              <div id="gift-item-preview" class="gift-item-master-preview"><div class="empty-state">Belum ada foto.</div></div>
+              <label class="switch-row"><span>Item Aktif</span><input id="gift-item-active" type="checkbox" checked/></label>
+              <button class="full touch-button">Simpan Master Item</button>
+              <button class="ghost full" type="button" id="gift-item-reset-form">Item Baru</button>
+            </form>
+            <div id="gift-item-master-result"></div>
+          </section>
 
-        <div class="grid two">
-          <div>
-            <label>Jumlah Kode</label>
-            <input id="qty" inputmode="numeric" value="5" required/>
-          </div>
-          <div>
-            <label>Nominal per Kode</label>
-            <input id="value" inputmode="numeric" value="100000" required/>
-          </div>
+          <section class="surface-card">
+            <h2>Generate Gift Item</h2>
+            <form id="gift-item-generate-form">
+              <label>Pilih Item</label>
+              <select id="gift-item-select" required></select>
+              <label>Campaign / Event</label>
+              <input id="gift-item-campaign" maxlength="100" value="Special Gift CACAYO" required/>
+              <div class="grid two">
+                <div><label>Jumlah Kode</label><input id="gift-item-qty" inputmode="numeric" value="10" required/></div>
+                <div><label>Expired Date</label><input id="gift-item-expired" type="date" value="${defaultExpiry}" required/></div>
+              </div>
+              <div class="notice">Setiap kode memberikan 1 item. Cut-off pada tanggal ED pukul 23:59.</div>
+              <button class="full touch-button" style="margin-top:14px">Generate Gift Item</button>
+            </form>
+            <div id="gift-item-generate-result"></div>
+          </section>
         </div>
 
-        <label>Expired Date</label>
-        <input id="expired" type="date" value="${defaultExpiry}" required/>
-
-        <button class="full" id="generate-code-btn" style="margin-top:14px">
-          Generate Voucher
-        </button>
-      </form>
-
-      <div id="gift-result" style="margin-top:12px"></div>
-    </section>
-
-    <section class="card">
-      <h2>Voucher & Gift Control</h2>
-      <p>
-        Voucher untuk pendaftaran member baru. Gift untuk existing member dan
-        akan diterima oleh member pertama yang berhasil claim.
-      </p>
-
-      <div id="voucher-summary" class="voucher-summary">
-        <div class="stat"><div class="label">Total</div><div class="value">-</div></div>
-        <div class="stat"><div class="label">Available</div><div class="value">-</div></div>
-        <div class="stat"><div class="label">Registered</div><div class="value">-</div></div>
-        <div class="stat"><div class="label">Claimed</div><div class="value">-</div></div>
+        <section class="surface-card">
+          <h2>Daftar Master Item</h2>
+          <div id="gift-item-master-list" class="gift-item-master-list"><div class="empty-state">Loading...</div></div>
+        </section>
       </div>
 
-      <div class="voucher-toolbar">
-        <select id="voucher-filter">
-          <option value="available">Available</option>
-          <option value="all">All Status</option>
-          <option value="registered">Registered</option>
-          <option value="claimed">Claimed</option>
-          <option value="expired">Expired</option>
-          <option value="void">Deleted / Void</option>
-        </select>
-        <span class="badge">1 kode = 1 penerima</span>
-        <button class="ghost" id="refresh-vouchers" type="button">Refresh</button>
-      </div>
-
-      <div id="voucher-list" class="list">
-        <div class="notice">Loading voucher & gift...</div>
-      </div>
-
-      <div class="pagination-bar">
-        <button class="ghost" id="prev-page" type="button">← Prev</button>
-        <div class="page-info" id="page-info">Page -</div>
-        <button class="ghost" id="next-page" type="button">Next →</button>
-      </div>
+      <section class="surface-card">
+        <h2>Voucher & Gift Control</h2>
+        <div class="voucher-toolbar">
+          <select id="voucher-filter">
+            <option value="available">Available</option>
+            <option value="all">All Status</option>
+            <option value="registered">Registered</option>
+            <option value="claimed">Claimed</option>
+            <option value="expired">Expired</option>
+            <option value="void">Deleted / Void</option>
+          </select>
+          <span class="badge">1 kode = 1 penerima</span>
+          <button class="ghost" id="refresh-vouchers" type="button">Refresh</button>
+        </div>
+        <div id="voucher-list" class="list"><div class="notice">Loading...</div></div>
+        <div class="pagination-bar">
+          <button class="ghost" id="prev-page" type="button">← Prev</button>
+          <div class="page-info" id="page-info">Page -</div>
+          <button class="ghost" id="next-page" type="button">Next →</button>
+        </div>
+      </section>
     </section>
   `);
 
   const joinBase=`${publicBaseUrl()}#join?code=`;
-  const giftClaimBase=`${publicBaseUrl()}#claim-gift?code=`;
-
+  const claimBase=`${publicBaseUrl()}#claim-gift?code=`;
   let currentPage=1;
   const pageSize=10;
   let currentRows=[];
   let totalCount=0;
+  let masterItems=[];
+  let masterImageData=null;
 
   function normalizedCodeType(value){
-    return String(value||"voucher").toLowerCase()==="gift"
-      ? "gift"
-      : "voucher";
+    const type=String(value||"voucher").toLowerCase();
+    return ["voucher","gift","item"].includes(type)?type:"voucher";
   }
-
   function codeTypeLabel(value){
-    return normalizedCodeType(value)==="gift"
-      ? "GIFT — EXISTING MEMBER"
-      : "VOUCHER — NEW MEMBER";
+    const type=normalizedCodeType(value);
+    return type==="item"?"GIFT ITEM":type==="gift"?"GIFT SALDO":"VOUCHER NEW MEMBER";
   }
-
   function codeLink(row){
-    return normalizedCodeType(row.code_type)==="gift"
-      ? `${giftClaimBase}${row.code}`
-      : `${joinBase}${row.code}`;
+    return normalizedCodeType(row.code_type)==="voucher"
+      ? `${joinBase}${row.code}`
+      : `${claimBase}${row.code}`;
   }
-
   function waMessageFor(row){
     const type=normalizedCodeType(row.code_type);
     const event=row.campaign_name||"-";
     const expiry=row.expired_at||"-";
     const link=codeLink(row);
+    if(type==="item"){
+      return `Halo Kak 🎁
 
+Kamu mendapatkan Gift Item dari ${OUTLET}.
+
+Item: ${row.gift_item_name||"Gift Item"}
+Event: ${event}
+Gunakan sebelum: ${expiry} pukul 23:59
+
+Klik link berikut untuk claim:
+${link}
+
+Login menggunakan nomor WhatsApp dan PIN member, lalu klik CLAIM / OK.
+
+Satu kode hanya dapat diclaim 1 kali.`;
+    }
     if(type==="gift"){
       return `Halo Kak 🎁
 
 Kamu mendapatkan Gift Dining Credit ${money(row.value)} dari ${OUTLET}.
 
 Event: ${event}
-Berlaku sampai: ${expiry}
+Berlaku sampai: ${expiry} pukul 23:59
 
 Klik link berikut untuk menerima gift:
 ${link}
 
-Login menggunakan nomor WhatsApp dan PIN member CACAYO, lalu cek detail gift dan klik CLAIM / OK.
-
-Gift hanya dapat diclaim 1 kali oleh member CACAYO yang sudah terdaftar. Member pertama yang berhasil claim akan menerima saldo gift.`;
+Login menggunakan nomor WhatsApp dan PIN member, lalu klik CLAIM / OK.`;
     }
-
     return `Halo Kak 🎁
 
 Kamu mendapatkan Voucher Dining Credit ${money(row.value)} dari ${OUTLET}.
 
 Event: ${event}
-Berlaku sampai: ${expiry}
+Berlaku sampai: ${expiry} pukul 23:59
 
-Daftar dan aktifkan voucher melalui link berikut:
+Daftar dan aktifkan voucher:
 ${link}
 
-Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
+Voucher hanya dapat digunakan 1 kali untuk member baru.`;
   }
-
   function voucherStatusClass(status){
     if(status==="registered"||status==="used")return "registered";
     if(status==="claimed")return "claimed";
@@ -996,356 +1227,247 @@ Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
     if(status==="void")return "void";
     return "available";
   }
-
   function renderTypeHelp(){
     const type=normalizedCodeType(byId("code-type").value);
-    const help=byId("code-type-help");
-    const button=byId("generate-code-btn");
-    const campaign=byId("campaign");
-
     if(type==="gift"){
-      help.innerHTML=`
-        <div class="gift-type-card">
-          <b>GIFT — Existing Member</b>
-          <span>
-            Tidak terikat ke nama tertentu. Existing member pertama yang login
-            dan claim akan menerima saldo gift.
-          </span>
-        </div>`;
-      button.textContent="Generate Gift";
-      if(campaign.value==="Soft Opening CACAYO"){
-        campaign.value="Special Gift CACAYO";
-      }
+      byId("code-type-help").innerHTML=`<div class="gift-type-card"><b>GIFT SALDO</b><span>Saldo existing member bertambah setelah claim.</span></div>`;
+      byId("generate-code-btn").textContent="Generate Gift Saldo";
+      if(byId("campaign").value==="Soft Opening CACAYO")byId("campaign").value="Special Gift CACAYO";
     }else{
-      help.innerHTML=`
-        <div class="voucher-type-card">
-          <b>VOUCHER — New Member</b>
-          <span>
-            Digunakan satu kali saat customer baru melakukan pendaftaran member.
-          </span>
-        </div>`;
-      button.textContent="Generate Voucher";
-      if(campaign.value==="Special Gift CACAYO"){
-        campaign.value="Soft Opening CACAYO";
-      }
+      byId("code-type-help").innerHTML=`<div class="voucher-type-card"><b>VOUCHER</b><span>Digunakan saat customer baru mendaftar.</span></div>`;
+      byId("generate-code-btn").textContent="Generate Voucher";
+      if(byId("campaign").value==="Special Gift CACAYO")byId("campaign").value="Soft Opening CACAYO";
     }
   }
-
-  function renderSummary(rows){
-    const available=rows.filter(v=>v.voucher_status==="available").length;
-    const registered=rows.filter(
-      v=>v.voucher_status==="registered"||v.voucher_status==="used"
-    ).length;
-    const claimed=rows.filter(v=>v.voucher_status==="claimed").length;
-
-    byId("voucher-summary").innerHTML=`
-      <div class="stat"><div class="label">Total Filter</div><div class="value">${totalCount}</div></div>
-      <div class="stat"><div class="label">Available Page</div><div class="value">${available}</div></div>
-      <div class="stat"><div class="label">Registered Page</div><div class="value">${registered}</div></div>
-      <div class="stat"><div class="label">Claimed Page</div><div class="value">${claimed}</div></div>
-    `;
-  }
-
   function renderPagination(){
-    const totalPages=Math.max(1,Math.ceil(totalCount/pageSize));
-    byId("page-info").textContent=
-      `Page ${currentPage} / ${totalPages} • ${totalCount} kode`;
+    const pages=Math.max(1,Math.ceil(totalCount/pageSize));
+    byId("page-info").textContent=`Page ${currentPage} / ${pages} • ${totalCount} kode`;
     byId("prev-page").disabled=currentPage<=1;
-    byId("next-page").disabled=currentPage>=totalPages;
+    byId("next-page").disabled=currentPage>=pages;
   }
-
-  function copiedStatusHtml(row){
-    if(!row.copied_at)return "";
-
-    const method=String(row.copied_method||"").toLowerCase();
-    const label=`COPIED ${method.toUpperCase()||""}`.trim();
-
-    return `
-      <div class="meta copied-meta">
-        ${esc(label)} • ${new Date(row.copied_at).toLocaleString("id-ID")}
-      </div>`;
-  }
-
   function renderVoucherRows(){
     if(!currentRows.length){
-      byId("voucher-list").innerHTML=
-        `<div class="notice">Tidak ada kode untuk filter ini.</div>`;
+      byId("voucher-list").innerHTML=`<div class="empty-state">Tidak ada kode.</div>`;
       renderPagination();
       return;
     }
-
     byId("voucher-list").innerHTML=currentRows.map(row=>{
       const type=normalizedCodeType(row.code_type);
       const cls=voucherStatusClass(row.voucher_status);
       const isAvailable=row.voucher_status==="available";
-      const isRegistered=
-        row.voucher_status==="registered"||row.voucher_status==="used";
-      const isClaimed=row.voucher_status==="claimed";
       const isCopied=Boolean(row.copied_at);
-
-      const activityInfo=isRegistered
-        ? `<div class="meta">Registered by: ${esc(row.used_by_name||"-")} • ${esc(row.used_by_phone||"-")}</div>`
-        : isClaimed
-          ? `<div class="meta">Claimed by: ${esc(row.used_by_name||"-")} • ${esc(row.used_by_phone||"-")}</div>`
-          : isAvailable
-            ? (isCopied
-                ? copiedStatusHtml(row)
-                : `<div class="meta">Belum dibagikan</div>`)
-            : `<div class="meta">Status: ${esc(row.voucher_status||"-")}</div>`;
-
-      let actions="";
-
-      if(isAvailable){
-        if(isCopied){
-          const copiedLabel="✓ COPIED";
-
-          actions=`
-            <div class="voucher-actions copied-actions">
-              <span class="copied-badge">${copiedLabel}</span>
-            </div>`;
-        }else{
-          const waLabel="Copy WA";
-
-          actions=`
-            <div class="voucher-actions">
-              <button class="secondary" type="button"
-                onclick="window.shareCampaignCode('${row.gift_id}','wa','${type}',this)">
-                ${waLabel}
-              </button>
-              <button class="ghost" type="button"
-                onclick="window.shareCampaignCode('${row.gift_id}','link','${type}',this)">
-                Copy Link
-              </button>
-              <button class="danger" type="button"
-                onclick="window.deleteCampaignCode('${row.gift_id}','${esc(row.code)}')">
-                Delete
-              </button>
-            </div>`;
-        }
-      }else{
-        actions=`
-          <div class="voucher-actions">
-            <span class="badge">
-              ${isRegistered?"REGISTERED":isClaimed?"CLAIMED":"NOT ACTIVE"}
-            </span>
-          </div>`;
-      }
-
-      return `
-        <div class="voucher-row ${cls}">
-          <div>
-            <div class="code-box">${esc(row.code)}</div>
-            <div class="meta">Exp: ${esc(row.expired_at||"-")}</div>
-          </div>
-
-          <div>
-            <span class="code-type-pill ${type}">${codeTypeLabel(type)}</span>
-            <div class="campaign">${esc(row.campaign_name||"-")}</div>
-            ${activityInfo}
-          </div>
-
-          <div>
-            <div class="money">${money(row.value)}</div>
-            <span class="status-pill ${cls}">
-              ${esc(String(row.voucher_status||"").toUpperCase())}
-            </span>
-          </div>
-
-          ${actions}
-        </div>`;
+      const usedText=row.voucher_status==="registered"
+        ? `Registered by ${row.used_by_name||"-"}`
+        : row.voucher_status==="claimed"
+          ? `Claimed by ${row.used_by_name||"-"}`
+          : isCopied
+            ? `COPIED ${String(row.copied_method||"").toUpperCase()}`
+            : "Belum dibagikan";
+      const valueHtml=type==="item"
+        ? `<div class="gift-code-item-thumb">${row.gift_item_image_data_url?`<img src="${row.gift_item_image_data_url}" alt="${esc(row.gift_item_name||"Item")}"/>`:""}<b>${esc(row.gift_item_name||"Gift Item")}</b></div>`
+        : `<div class="money">${money(row.value)}</div>`;
+      const actions=isAvailable
+        ? isCopied
+          ? `<div class="voucher-actions"><span class="copied-badge">✓ COPIED</span></div>`
+          : `<div class="voucher-actions">
+              <button class="secondary" onclick="window.shareCampaignCode('${row.gift_id}','wa',this)">Copy WA</button>
+              <button class="ghost" onclick="window.shareCampaignCode('${row.gift_id}','link',this)">Copy Link</button>
+              <button class="danger" onclick="window.deleteCampaignCode('${row.gift_id}','${esc(row.code)}')">Delete</button>
+            </div>`
+        : `<div class="voucher-actions"><span class="badge">${esc(String(row.voucher_status||"").toUpperCase())}</span></div>`;
+      return `<div class="voucher-row ${cls}">
+        <div><div class="code-box">${esc(row.code)}</div><div class="meta">ED ${esc(row.expired_at||"-")} • 23:59</div></div>
+        <div><span class="code-type-pill ${type}">${codeTypeLabel(type)}</span><div class="campaign">${esc(row.campaign_name||"-")}</div><div class="meta">${esc(usedText)}</div></div>
+        <div>${valueHtml}<span class="status-pill ${cls}">${esc(String(row.voucher_status||"").toUpperCase())}</span></div>
+        ${actions}
+      </div>`;
     }).join("");
-
     renderPagination();
   }
-
   async function loadCodes(){
-    const filter=byId("voucher-filter").value;
-    const offset=(currentPage-1)*pageSize;
-
-    byId("voucher-list").innerHTML=
-      `<div class="notice">Loading voucher & gift...</div>`;
-
+    byId("voucher-list").innerHTML=`<div class="empty-state">Loading...</div>`;
     try{
-      const rows=await rpc("s3_list_gift_codes_paged",{
-        p_staff_session_token:u.session_token,
-        p_status:filter,
+      currentRows=await rpc("s3_list_gift_codes_paged",{
+        p_staff_session_token:user.session_token,
+        p_status:byId("voucher-filter").value,
         p_limit:pageSize,
-        p_offset:offset
-      });
-
-      currentRows=rows||[];
-      totalCount=currentRows.length
-        ? Number(currentRows[0].total_count||0)
-        : 0;
-
-      renderSummary(currentRows);
+        p_offset:(currentPage-1)*pageSize
+      })||[];
+      totalCount=currentRows.length?Number(currentRows[0].total_count||0):0;
       renderVoucherRows();
     }catch(err){
-      byId("voucher-list").innerHTML=
-        `<div class="error">${safeError(err)}</div>`;
+      byId("voucher-list").innerHTML=`<div class="error">${safeError(err)}</div>`;
     }
   }
-
   async function copyWithFallback(text){
-    try{
-      await navigator.clipboard.writeText(text);
-      return true;
-    }catch(err){
-      window.prompt(
-        "Clipboard browser gagal. Copy teks berikut secara manual:",
-        text
-      );
-      return false;
-    }
+    try{await navigator.clipboard.writeText(text);return true;}
+    catch(err){window.prompt("Copy teks berikut:",text);return false;}
   }
-
-  window.shareCampaignCode=async(giftId,method,type,button)=>{
-    if(!giftId||!["wa","link"].includes(method))return;
-
-    const rowElement=button?button.closest(".voucher-row"):null;
-    const rowButtons=rowElement
-      ? Array.from(rowElement.querySelectorAll("button"))
-      : [];
-
-    rowButtons.forEach(btn=>btn.disabled=true);
-    if(button)button.textContent="COPYING...";
-
+  window.shareCampaignCode=async(giftId,method,button)=>{
+    const buttons=button?Array.from(button.closest(".voucher-row").querySelectorAll("button")):[];
+    buttons.forEach(btn=>btn.disabled=true);
     try{
       const rows=await rpc("s3_copy_gift_code",{
-        p_staff_session_token:u.session_token,
+        p_staff_session_token:user.session_token,
         p_gift_id:giftId,
         p_method:method
       });
       const result=rows&&rows[0]?rows[0]:{};
-
       if(result.copy_allowed===false){
-        alert(result.error_message||"Kode sudah pernah dibagikan.");
+        alert(result.error_message||"Kode sudah pernah dicopy.");
         await loadCodes();
         return;
       }
-
-      const text=method==="wa"
-        ? waMessageFor(result)
-        : codeLink(result);
-
-      const copied=await copyWithFallback(text);
-
-      if(copied){
-        alert(
-          `${method==="wa"?"Pesan WhatsApp":"Link"} ${result.code} berhasil dicopy.`
-        );
-      }
-
+      await copyWithFallback(method==="wa"?waMessageFor(result):codeLink(result));
       await loadCodes();
     }catch(err){
-      rowButtons.forEach(btn=>btn.disabled=false);
-
-      if(button){
-        button.textContent=method==="wa"
-          ? "Copy WA"
-          : "Copy Link";
-      }
-
+      buttons.forEach(btn=>btn.disabled=false);
       alert(safeError(err));
     }
   };
-
   window.deleteCampaignCode=async(giftId,code)=>{
-    if(!confirm(
-      `Delete / void kode ${code}? Kode yang sudah dihapus tidak bisa digunakan.`
-    ))return;
-
+    if(!confirm(`Delete kode ${code}?`))return;
     try{
       await rpc("s3_delete_gift_code",{
-        p_staff_session_token:u.session_token,
+        p_staff_session_token:user.session_token,
         p_gift_id:giftId
       });
-      alert(`Kode ${code} deleted / void.`);
       await loadCodes();
-    }catch(err){
-      alert(safeError(err));
-    }
+    }catch(err){alert(safeError(err));}
   };
+
+  function resetMasterForm(){
+    byId("gift-item-id").value="";
+    byId("gift-item-name").value="";
+    byId("gift-item-description").value="";
+    byId("gift-item-active").checked=true;
+    byId("gift-item-file").value="";
+    masterImageData=null;
+    byId("gift-item-preview").innerHTML=`<div class="empty-state">Belum ada foto.</div>`;
+  }
+  function renderMasterItems(){
+    const active=masterItems.filter(item=>item.is_active);
+    byId("gift-item-select").innerHTML=active.length
+      ? active.map(item=>`<option value="${item.item_id}">${esc(item.name)}</option>`).join("")
+      : `<option value="">Belum ada item aktif</option>`;
+    byId("gift-item-master-list").innerHTML=masterItems.length
+      ? masterItems.map((item,index)=>`
+          <article class="gift-item-master-row">
+            <div class="gift-item-master-thumb">${item.image_data_url?`<img src="${item.image_data_url}" alt="${esc(item.name)}"/>`:""}</div>
+            <div><h3>${esc(item.name)}</h3><p>${esc(item.description||"")}</p><span class="badge ${item.is_active?"ok":""}">${item.is_active?"AKTIF":"NONAKTIF"}</span></div>
+            <button class="ghost" onclick="window.editGiftItemMaster(${index})">Edit</button>
+          </article>`).join("")
+      : `<div class="empty-state">Belum ada Master Gift Item.</div>`;
+  }
+  async function loadMasterItems(){
+    try{
+      masterItems=await rpc("s4_list_gift_item_master",{
+        p_staff_session_token:user.session_token,
+        p_include_inactive:true
+      })||[];
+      renderMasterItems();
+    }catch(err){
+      byId("gift-item-master-list").innerHTML=`<div class="error">${safeError(err)}</div>`;
+    }
+  }
+  window.editGiftItemMaster=index=>{
+    const item=masterItems[index];
+    if(!item)return;
+    byId("gift-item-id").value=item.item_id;
+    byId("gift-item-name").value=item.name||"";
+    byId("gift-item-description").value=item.description||"";
+    byId("gift-item-active").checked=Boolean(item.is_active);
+    masterImageData=item.image_data_url||null;
+    byId("gift-item-preview").innerHTML=masterImageData?`<img src="${masterImageData}" alt="${esc(item.name)}"/>`:`<div class="empty-state">Belum ada foto.</div>`;
+    byId("gift-item-master-form").scrollIntoView({behavior:"smooth"});
+  };
+
+  document.querySelectorAll("[data-gift-tab]").forEach(button=>{
+    button.onclick=()=>{
+      document.querySelectorAll("[data-gift-tab]").forEach(b=>b.classList.toggle("active",b===button));
+      const itemTab=button.dataset.giftTab==="item";
+      byId("gift-balance-panel").hidden=itemTab;
+      byId("gift-item-panel").hidden=!itemTab;
+    };
+  });
 
   byId("code-type").onchange=renderTypeHelp;
-
-  byId("voucher-filter").onchange=()=>{
-    currentPage=1;
-    loadCodes();
-  };
-
-  byId("refresh-vouchers").onclick=loadCodes;
-
-  byId("prev-page").onclick=()=>{
-    if(currentPage>1){
-      currentPage--;
-      loadCodes();
-    }
-  };
-
-  byId("next-page").onclick=()=>{
-    currentPage++;
-    loadCodes();
-  };
-
   byId("campaign-code-form").onsubmit=async(event)=>{
     event.preventDefault();
-
-    const type=normalizedCodeType(byId("code-type").value);
-    const qty=Math.min(parseMoney(byId("qty").value),500);
-    const value=parseMoney(byId("value").value);
-    const campaign=byId("campaign").value.trim();
-    const expired=byId("expired").value;
     const box=byId("gift-result");
-
-    if(qty<1){
-      box.innerHTML=`<div class="error">Jumlah kode minimal 1.</div>`;
-      return;
-    }
-
-    if(value<1000){
-      box.innerHTML=`<div class="error">Nominal minimal Rp1.000.</div>`;
-      return;
-    }
-
-    box.innerHTML=`
-      <div class="notice">
-        Generating ${qty} ${type==="gift"?"gift":"voucher"}...
-      </div>`;
-
+    box.innerHTML=`<div class="notice">Generating...</div>`;
     try{
-      const created=await rpc("s3_generate_campaign_codes",{
-        p_staff_session_token:u.session_token,
-        p_code_type:type,
-        p_campaign_name:campaign,
-        p_value:value,
-        p_expired_at:expired,
-        p_qty:qty
+      const rows=await rpc("s3_generate_campaign_codes",{
+        p_staff_session_token:user.session_token,
+        p_code_type:normalizedCodeType(byId("code-type").value),
+        p_campaign_name:byId("campaign").value.trim(),
+        p_value:parseMoney(byId("value").value),
+        p_expired_at:byId("expired").value,
+        p_qty:Math.min(parseMoney(byId("qty").value),500)
       });
-
-      const rows=created||[];
-
-      box.innerHTML=`
-        <div class="success">
-          <b>${rows.length} ${type==="gift"?"Gift":"Voucher"} Generated ✅</b><br>
-          Total value: <b>${money(rows.length*value)}</b>
-        </div>
-        <div class="notice" style="margin-top:10px">
-          ${type==="gift"
-            ? "Klik Copy WA pada masing-masing Gift, lalu paste dan kirim manual ke customer."
-            : "Copy pesan atau link masing-masing Voucher untuk dikirim ke calon member."}
-        </div>`;
-
+      box.innerHTML=`<div class="success">${(rows||[]).length} kode berhasil dibuat.</div>`;
       currentPage=1;
       byId("voucher-filter").value="available";
       await loadCodes();
-    }catch(err){
-      box.innerHTML=`<div class="error">${safeError(err)}</div>`;
-    }
+    }catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;}
   };
 
+  byId("gift-item-file").onchange=async()=>{
+    const file=byId("gift-item-file").files[0];
+    if(!file)return;
+    const box=byId("gift-item-master-result");
+    box.innerHTML=`<div class="notice">Menyiapkan foto...</div>`;
+    try{
+      masterImageData=await resizeUploadedImage(file,800,800,1800000);
+      byId("gift-item-preview").innerHTML=`<img src="${masterImageData}" alt="Preview item"/>`;
+      box.innerHTML=`<div class="success">Foto siap 800 × 800 px.</div>`;
+    }catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;}
+  };
+  byId("gift-item-master-form").onsubmit=async(event)=>{
+    event.preventDefault();
+    const box=byId("gift-item-master-result");
+    box.innerHTML=`<div class="notice">Menyimpan item...</div>`;
+    try{
+      await rpc("s4_save_gift_item_master",{
+        p_staff_session_token:user.session_token,
+        p_item_id:byId("gift-item-id").value||null,
+        p_name:byId("gift-item-name").value.trim(),
+        p_description:byId("gift-item-description").value.trim(),
+        p_image_data_url:masterImageData,
+        p_is_active:byId("gift-item-active").checked
+      });
+      box.innerHTML=`<div class="success">Master Gift Item tersimpan.</div>`;
+      resetMasterForm();
+      await loadMasterItems();
+    }catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;}
+  };
+  byId("gift-item-reset-form").onclick=resetMasterForm;
+  byId("gift-item-generate-form").onsubmit=async(event)=>{
+    event.preventDefault();
+    const box=byId("gift-item-generate-result");
+    box.innerHTML=`<div class="notice">Generating Gift Item...</div>`;
+    try{
+      const rows=await rpc("s4_generate_item_gift_codes",{
+        p_staff_session_token:user.session_token,
+        p_gift_item_id:byId("gift-item-select").value,
+        p_campaign_name:byId("gift-item-campaign").value.trim(),
+        p_expired_at:byId("gift-item-expired").value,
+        p_qty:Math.min(parseMoney(byId("gift-item-qty").value),500)
+      });
+      box.innerHTML=`<div class="success">${(rows||[]).length} Gift Item berhasil dibuat.</div>`;
+      currentPage=1;
+      byId("voucher-filter").value="available";
+      await loadCodes();
+    }catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;}
+  };
+
+  byId("voucher-filter").onchange=()=>{currentPage=1;loadCodes();};
+  byId("refresh-vouchers").onclick=loadCodes;
+  byId("prev-page").onclick=()=>{if(currentPage>1){currentPage--;loadCodes();}};
+  byId("next-page").onclick=()=>{currentPage++;loadCodes();};
+
   renderTypeHelp();
-  await loadCodes();
+  await Promise.all([loadMasterItems(),loadCodes()]);
 }
 async function renderMembers(){
   const user=requireLogin();if(!user)return;
@@ -1444,10 +1566,11 @@ async function renderCustomerPortal(){
   const target=document.querySelector("main");
   target.innerHTML=`<div class="empty-state">Memuat...</div>`;
   try{
-    const [homeRows,historyRows,expiryRows]=await Promise.all([
+    const [homeRows,historyRows,expiryRows,giftItemRows]=await Promise.all([
       rpc("mvp_customer_home",{p_session_token:session.session_token}),
       rpc("mvp_customer_history",{p_session_token:session.session_token}),
-      rpc("mvp_customer_balance_expiry",{p_session_token:session.session_token})
+      rpc("mvp_customer_balance_expiry",{p_session_token:session.session_token}),
+      rpc("mvp_customer_gift_items",{p_session_token:session.session_token})
     ]);
     if(!homeRows||!homeRows.length)throw new Error("Session tidak valid.");
     const customer=homeRows[0];
@@ -1457,9 +1580,10 @@ async function renderCustomerPortal(){
         ${brandMiniHtml()}
         <div class="customer-greeting"><span>Halo,</span><b>${esc(customer.name||'Member')}</b></div>
         <div class="balance-hero"><span>Saldo Dining</span><strong>${money(customer.balance||0)}</strong><small>Berlaku sampai ${dateID(expiry.expires_at)}</small></div>
-        <div class="customer-action-grid">
-          <button data-panel="history"><span>◷</span><b>Riwayat</b></button>
+        <div class="customer-action-grid five">
+          <button data-panel="items"><span>▦</span><b>Gift Saya</b></button>
           <button data-panel="gift"><span>◇</span><b>Claim Gift</b></button>
+          <button data-panel="history"><span>◷</span><b>Riwayat</b></button>
           <button data-panel="topup"><span>⊕</span><b>Top Up</b></button>
           <button data-panel="account"><span>?</span><b>Akun</b></button>
         </div>
@@ -1468,6 +1592,7 @@ async function renderCustomerPortal(){
       </section>`;
     const panel=byId("customer-panel");
     const panels={
+      items:`<h2>Gift Item Saya</h2>${customerGiftItemCardsHtml(giftItemRows||[])}`,
       history:`<h2>Riwayat Transaksi</h2>${historyListHtml(historyRows||[])}`,
       gift:`<h2>Claim Gift</h2><div class="claim-code-row"><input id="portal-gift-code" class="code-box" placeholder="Gift Code"/><button id="portal-gift-claim-btn">Lanjut</button></div>`,
       topup:`<h2>Top Up</h2><p>Tunjukkan akun ini ke kasir untuk menambah saldo.</p><div class="compact-package-list"><div><b>NICKEL</b><span>Rp1 jt → Rp1,05 jt</span></div><div><b>SILVER</b><span>Rp2 jt → Rp2,2 jt</span></div><div><b>GOLD</b><span>Rp3 jt → Rp3,45 jt</span></div><div><b>DIAMOND</b><span>Rp4 jt → Rp4,8 jt</span></div></div>`,
@@ -1475,7 +1600,7 @@ async function renderCustomerPortal(){
     };
     function openPanel(name){panel.innerHTML=panels[name]||"";document.querySelectorAll("[data-panel]").forEach(b=>b.classList.toggle("active",b.dataset.panel===name));if(name==="gift"){byId("portal-gift-claim-btn").onclick=()=>{const code=byId("portal-gift-code").value.trim().toUpperCase();if(!code){alert("Masukkan Gift Code.");return;}setHash("claim-gift",{code});};}}
     document.querySelectorAll("[data-panel]").forEach(button=>button.onclick=()=>openPanel(button.dataset.panel));
-    openPanel("history");
+    openPanel((giftItemRows||[]).some(item=>item.status==="available")?"items":"history");
     byId("customer-logout-btn").onclick=async()=>{try{await rpc("mvp_customer_logout",{p_session_token:session.session_token});}catch(e){}clearCustomerSession();setHash("customer-login");};
   }catch(err){clearCustomerSession();target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div><button class="full" onclick="setHash('customer-login')">Login Ulang</button></section>`;}
 }
@@ -1484,250 +1609,100 @@ async function renderClaimGift(){
   const {params}=getRoute();
   const code=String(params.code||"").trim().toUpperCase();
   const session=getCustomerSession();
-
   clearSession();
-  byId("app").innerHTML=
-    `<main style="padding:16px;max-width:600px;margin:auto"></main>`;
-
+  byId("app").innerHTML=`<main class="customer-shell"></main>`;
   const target=document.querySelector("main");
 
   if(!code){
-    target.innerHTML=`
-      <section class="card">
-        ${brandMiniHtml()}
-        <h1>Claim Gift</h1>
-        <p>Masukkan Gift Code yang kamu terima melalui WhatsApp.</p>
-        <input id="claim-gift-code-input" class="code-box"
-          placeholder="Gift Code"/>
-        <button class="full" style="margin-top:12px"
-          id="claim-gift-code-continue">
-          Lanjut
-        </button>
-        <button class="ghost full" style="margin-top:8px"
-          onclick="setHash('customer-portal')">
-          Kembali
-        </button>
-      </section>`;
-
+    target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<h1>Claim Gift</h1><input id="claim-gift-code-input" class="code-box" placeholder="Gift Code"/><button class="full touch-button" style="margin-top:12px" id="claim-gift-code-continue">Lanjut</button><button class="text-button" onclick="setHash('customer-portal')">Kembali</button></section>`;
     byId("claim-gift-code-continue").onclick=()=>{
-      const entered=byId("claim-gift-code-input")
-        .value
-        .trim()
-        .toUpperCase();
-
-      if(!entered){
-        alert("Masukkan Gift Code.");
-        return;
-      }
-
+      const entered=byId("claim-gift-code-input").value.trim().toUpperCase();
+      if(!entered)return alert("Masukkan Gift Code.");
       setHash("claim-gift",{code:entered});
     };
     return;
   }
 
   if(!session||!session.session_token){
-    target.innerHTML=`
-      <section class="card">
-        ${brandMiniHtml()}
-        <div class="gift-hero">
-          <div class="gift-icon">🎁</div>
-          <h1>Kamu Mendapat Gift dari CACAYO</h1>
-        </div>
-        <div class="gift-code-display">${esc(code)}</div>
-        <p>
-          Login dengan nomor WhatsApp dan PIN member untuk melihat detail gift.
-        </p>
-        <button class="full"
-          onclick="setHash('customer-login',{claim:'${esc(code)}'})">
-          Login untuk Claim
-        </button>
-        <button class="ghost full" style="margin-top:8px"
-          onclick="setHash('customer-login')">
-          Kembali
-        </button>
-      </section>`;
+    target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="gift-icon">🎁</div><h1>Kamu Mendapat Gift</h1><div class="gift-code-display">${esc(code)}</div><p>Login untuk melihat detail dan claim gift.</p><button class="full touch-button" onclick="setHash('customer-login',{claim:'${esc(code)}'})">Login untuk Claim</button></section>`;
     return;
   }
 
-  target.innerHTML=`
-    <section class="card">
-      ${brandMiniHtml()}
-      <h1>Memeriksa Gift...</h1>
-      <div class="notice">Mohon tunggu.</div>
-    </section>`;
+  target.innerHTML=`<div class="empty-state">Memeriksa Gift...</div>`;
 
   try{
-    const previewRows=await rpc("mvp_customer_preview_gift",{
+    const rows=await rpc("mvp_customer_preview_reward",{
       p_session_token:session.session_token,
       p_code:code
     });
-    const gift=previewRows&&previewRows[0]?previewRows[0]:null;
+    const reward=rows&&rows[0]?rows[0]:{};
+    if(reward.claim_allowed===false)throw new Error(reward.error_message||"Gift tidak dapat diclaim.");
+    const isItem=reward.code_type==="item";
 
-    if(!gift){
-      throw new Error("Gift tidak ditemukan.");
-    }
+    target.innerHTML=`<section class="customer-confirm-card reward-preview-card">
+      ${brandMiniHtml()}
+      ${isItem
+        ? `<div class="reward-item-preview">${reward.item_image_data_url?`<img src="${reward.item_image_data_url}" alt="${esc(reward.item_name||"Gift Item")}"/>`:""}<h1>${esc(reward.item_name||"Gift Item")}</h1><p>${esc(reward.item_description||"")}</p><div class="gift-item-expiry"><b>Gunakan sebelum ${dateID(reward.expired_at)}</b><span>Cut-off 23:59</span></div></div>`
+        : `<div class="gift-hero"><div class="gift-icon">🎁</div><h1>${esc(reward.campaign_name||"Gift Saldo")}</h1></div><div class="gift-value-card"><span>Gift Dining Credit</span><strong>${money(reward.value||0)}</strong></div><div class="item"><div class="title">Saldo setelah claim</div><div class="meta">${money(Number(reward.current_balance||0)+Number(reward.value||0))}</div></div><div class="item"><div class="title">Masa aktif saldo</div><div class="meta">${dateID(reward.result_expiry)} • 23:59</div></div>`}
+      <div class="notice">Satu kode hanya dapat diclaim satu kali.</div>
+      <button class="full touch-button" style="margin-top:14px" id="confirm-reward-claim">CLAIM / OK</button>
+      <div id="claim-gift-result"></div>
+    </section>`;
 
-    if(gift.claim_allowed===false){
-      target.innerHTML=`
-        <section class="card">
-          ${brandMiniHtml()}
-          <h1>Gift Tidak Bisa Diclaim</h1>
-          <div class="error">
-            ${esc(gift.error_message||"Gift tidak tersedia.")}
-          </div>
-          <button class="full" style="margin-top:12px"
-            onclick="setHash('customer-portal')">
-            Kembali ke Customer Portal
-          </button>
-        </section>`;
-      return;
-    }
-
-    target.innerHTML=`
-      <section class="card">
-        ${brandMiniHtml()}
-
-        <div class="gift-hero">
-          <div class="gift-icon">🎁</div>
-          <h1>${esc(gift.campaign_name||"Gift dari CACAYO")}</h1>
-          <p>Gift untuk existing member CACAYO.</p>
-        </div>
-
-        <div class="gift-value-card">
-          <span>Gift Dining Credit</span>
-          <strong>${money(gift.value||0)}</strong>
-        </div>
-
-        <div class="item">
-          <div class="title">Gift Code</div>
-          <div class="meta">${esc(gift.code||code)}</div>
-        </div>
-
-        <div class="item">
-          <div class="title">Gift berlaku sampai</div>
-          <div class="meta">${dateID(gift.expired_at)}</div>
-        </div>
-
-        <div class="item">
-          <div class="title">Saldo sekarang</div>
-          <div class="meta">${money(gift.current_balance||0)}</div>
-        </div>
-
-        <div class="item">
-          <div class="title">Saldo setelah claim</div>
-          <div class="meta">
-            ${money(
-              Number(gift.current_balance||0)+Number(gift.value||0)
-            )}
-          </div>
-        </div>
-
-        <div class="item">
-          <div class="title">Masa aktif total saldo setelah claim</div>
-          <div class="meta">${dateID(gift.result_expiry)}</div>
-        </div>
-
-        <div class="notice">
-          Gift hanya dapat diclaim satu kali. Setelah kamu klik CLAIM / OK,
-          saldo akan langsung masuk ke akunmu. Masa aktif total saldo mengikuti
-          tanggal yang paling panjang antara saldo lama dan Gift.
-        </div>
-
-        <button class="full" style="margin-top:14px"
-          id="confirm-gift-claim-btn">
-          CLAIM / OK
-        </button>
-
-        <div id="claim-gift-result" style="margin-top:12px"></div>
-      </section>`;
-
-    byId("confirm-gift-claim-btn").onclick=async()=>{
-      const button=byId("confirm-gift-claim-btn");
+    byId("confirm-reward-claim").onclick=async()=>{
+      const button=byId("confirm-reward-claim");
       const box=byId("claim-gift-result");
-
       button.disabled=true;
-      button.textContent="CLAIMING...";
-      box.innerHTML=
-        `<div class="notice">Menambahkan gift ke saldo...</div>`;
-
+      box.innerHTML=`<div class="notice">Memproses...</div>`;
       try{
-        const claimRows=await rpc("mvp_customer_claim_gift",{
+        const claimRows=await rpc("mvp_customer_claim_reward",{
           p_session_token:session.session_token,
           p_code:code
         });
         const result=claimRows&&claimRows[0]?claimRows[0]:{};
+        if(result.claim_success===false)throw new Error(result.error_message||"Claim gagal.");
 
-        if(result.claim_success===false){
-          box.innerHTML=`
-            <div class="error">
-              ${esc(result.error_message||"Gift gagal diclaim.")}
-            </div>`;
-          button.disabled=false;
-          button.textContent="CLAIM / OK";
-          return;
+        if(result.code_type==="item"){
+          target.innerHTML=`<section class="customer-confirm-card">${brandMiniHtml()}<div class="success-check">✓</div><h1>Gift Item Berhasil Diclaim</h1><div class="reward-item-preview compact">${result.item_image_data_url?`<img src="${result.item_image_data_url}" alt="${esc(result.item_name||"Gift Item")}"/>`:""}<h2>${esc(result.item_name||"Gift Item")}</h2><div class="gift-item-expiry"><b>Gunakan sebelum ${dateID(result.item_expires_at)}</b><span>Cut-off 23:59</span></div></div><button class="full touch-button" onclick="setHash('customer-portal')">Lihat Gift Saya</button></section>`;
+        }else{
+          target.innerHTML=`<section class="customer-confirm-card">${brandMiniHtml()}<div class="success-check">✓</div><h1>Gift Saldo Berhasil Diclaim</h1><div class="gift-value-card success-gift"><span>Saldo Ditambahkan</span><strong>${money(result.gift_value||0)}</strong></div><div class="kpi"><div class="label">Total Saldo</div><div class="value">${money(result.new_balance||0)}</div></div><div class="success">Berlaku sampai ${dateID(result.new_expiry)} pukul 23:59.</div><button class="full touch-button" onclick="setHash('customer-portal')">Kembali</button></section>`;
         }
-
-        target.innerHTML=`
-          <section class="card">
-            ${brandMiniHtml()}
-
-            <div class="customer-home-header">
-              <div class="check">✓</div>
-              <h1>Gift Berhasil Diclaim</h1>
-              <p>${esc(result.campaign_name||"Gift dari CACAYO")}</p>
-            </div>
-
-            <div class="gift-value-card success-gift">
-              <span>Saldo Ditambahkan</span>
-              <strong>${money(result.gift_value||0)}</strong>
-            </div>
-
-            <div class="kpi">
-              <div class="label">Total Saldo Sekarang</div>
-              <div class="value">${money(result.new_balance||0)}</div>
-            </div>
-
-            <div class="success" style="margin-top:12px">
-              Seluruh saldo berlaku sampai
-              <b>${dateID(result.new_expiry)}</b>.
-            </div>
-
-            <button class="full" style="margin-top:14px"
-              onclick="setHash('customer-portal')">
-              Kembali ke Customer Portal
-            </button>
-          </section>`;
       }catch(err){
         box.innerHTML=`<div class="error">${safeError(err)}</div>`;
         button.disabled=false;
-        button.textContent="CLAIM / OK";
       }
     };
   }catch(err){
-    target.innerHTML=`
-      <section class="card">
-        ${brandMiniHtml()}
-        <h1>Claim Gift</h1>
-        <div class="error">${safeError(err)}</div>
-        <button class="full" style="margin-top:12px"
-          onclick="setHash('customer-portal')">
-          Kembali
-        </button>
-      </section>`;
+    target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div><button class="full" onclick="setHash('customer-portal')">Kembali</button></section>`;
   }
 }
-
-
-async function resizePromoImage(file,width=1200,height=800){
-  if(!file)throw new Error("Pilih gambar promo.");
+async function resizeUploadedImage(file,width,height,maxOutputLength=2300000){
+  if(!file)throw new Error("Pilih gambar.");
   if(file.size>10*1024*1024)throw new Error("File asli maksimal 10 MB.");
-  const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Gagal membaca gambar."));reader.readAsDataURL(file);});
-  const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error("Format gambar tidak didukung."));img.src=dataUrl;});
-  const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;const ctx=canvas.getContext("2d");
-  const scale=Math.max(width/image.width,height/image.height);const sourceWidth=width/scale;const sourceHeight=height/scale;const sx=(image.width-sourceWidth)/2;const sy=(image.height-sourceHeight)/2;
+  const dataUrl=await new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=()=>resolve(reader.result);
+    reader.onerror=()=>reject(new Error("Gagal membaca gambar."));
+    reader.readAsDataURL(file);
+  });
+  const image=await new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>resolve(img);
+    img.onerror=()=>reject(new Error("Format gambar tidak didukung."));
+    img.src=dataUrl;
+  });
+  const canvas=document.createElement("canvas");
+  canvas.width=width;
+  canvas.height=height;
+  const ctx=canvas.getContext("2d");
+  const scale=Math.max(width/image.width,height/image.height);
+  const sourceWidth=width/scale;
+  const sourceHeight=height/scale;
+  const sx=(image.width-sourceWidth)/2;
+  const sy=(image.height-sourceHeight)/2;
   ctx.drawImage(image,sx,sy,sourceWidth,sourceHeight,0,0,width,height);
   const output=canvas.toDataURL("image/jpeg",0.82);
-  if(output.length>2300000)throw new Error("Gambar masih terlalu besar. Gunakan gambar yang lebih sederhana.");
+  if(output.length>maxOutputLength)throw new Error("Gambar masih terlalu besar.");
   return output;
 }
 
@@ -1737,37 +1712,58 @@ async function renderPromoManage(){
   screen(`<section class="tablet-page">${staffPageHeader("Kelola Promo",staffHomeRoute(),"Tampil setelah transaksi customer berhasil")}<section class="surface-card promo-admin-card"><div class="promo-preview-frame" id="promo-preview"><div class="empty-state">Belum ada gambar promo.</div></div><form id="promo-form"><label>Gambar Promo</label><input id="promo-file" type="file" accept="image/jpeg,image/png,image/webp"/><small>Gambar otomatis dipotong menjadi 1200 × 800 px. Maksimal file awal 10 MB.</small><label>Judul</label><input id="promo-title" maxlength="100" placeholder="Contoh: Buy 1 Get 1"/><label>Keterangan</label><textarea id="promo-caption" maxlength="240" placeholder="Promo berlaku setiap Senin"></textarea><label class="switch-row"><span>Aktifkan Promo</span><input id="promo-active" type="checkbox"/></label><button class="full touch-button">Simpan Promo</button></form><div id="promo-result"></div></section></section>`);
   let imageData=null;
   try{const rows=await rpc("s4_get_promo_admin",{p_staff_session_token:user.session_token});const promo=rows&&rows[0]?rows[0]:{};byId("promo-title").value=promo.title||"";byId("promo-caption").value=promo.caption||"";byId("promo-active").checked=Boolean(promo.is_active);if(promo.image_data_url){imageData=promo.image_data_url;byId("promo-preview").innerHTML=`<img src="${promo.image_data_url}" alt="Preview promo"/>`;}}catch(err){byId("promo-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}
-  byId("promo-file").onchange=async()=>{const file=byId("promo-file").files[0];if(!file)return;byId("promo-result").innerHTML=`<div class="notice">Menyiapkan gambar...</div>`;try{imageData=await resizePromoImage(file);byId("promo-preview").innerHTML=`<img src="${imageData}" alt="Preview promo"/>`;byId("promo-result").innerHTML=`<div class="success">Gambar siap: 1200 × 800 px.</div>`;}catch(err){byId("promo-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}};
+  byId("promo-file").onchange=async()=>{const file=byId("promo-file").files[0];if(!file)return;byId("promo-result").innerHTML=`<div class="notice">Menyiapkan gambar...</div>`;try{imageData=await resizeUploadedImage(file,1200,800,2300000);byId("promo-preview").innerHTML=`<img src="${imageData}" alt="Preview promo"/>`;byId("promo-result").innerHTML=`<div class="success">Gambar siap: 1200 × 800 px.</div>`;}catch(err){byId("promo-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}};
   byId("promo-form").onsubmit=async(event)=>{event.preventDefault();const box=byId("promo-result");box.innerHTML=`<div class="notice">Menyimpan promo...</div>`;try{const rows=await rpc("s4_save_promo",{p_staff_session_token:user.session_token,p_title:byId("promo-title").value.trim(),p_caption:byId("promo-caption").value.trim(),p_image_data_url:imageData,p_is_active:byId("promo-active").checked});const promo=rows&&rows[0]?rows[0]:{};box.innerHTML=`<div class="success">Promo tersimpan. Status: <b>${promo.is_active?'AKTIF':'NONAKTIF'}</b>.</div>`;}catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;}};
 }
 
 async function renderPromo(){
-  const {params}=getRoute();const token=params.token;
-  byId("app").innerHTML=`<main class="customer-shell promo-customer-shell"></main>`;const target=document.querySelector("main");
+  const {params}=getRoute();
+  const token=params.token;
+  const kind=params.kind==="item"?"item":"balance";
+  byId("app").innerHTML=`<main class="customer-shell promo-customer-shell"></main>`;
+  const target=document.querySelector("main");
   try{
-    const [approvalRows,promoRows]=await Promise.all([rpc("mvp_get_approval",{p_token:token}),rpc("mvp_get_active_promo",{p_outlet_slug:OUTLET_SLUG})]);
-    const approval=approvalRows&&approvalRows[0]?approvalRows[0]:{};const promo=promoRows&&promoRows[0]?promoRows[0]:null;
-    target.innerHTML=`<section class="promo-customer-card">${brandMiniHtml()}<div class="transaction-success-strip"><span>✓</span><div><b>Transaksi Berhasil</b><small>${money(approval.balance_used||0)} • Sisa saldo ${money(approval.balance_after||0)}</small></div></div>${promo&&promo.image_data_url?`<img class="promo-customer-image" src="${promo.image_data_url}" alt="${esc(promo.title||'Promo')}"/><h1>${esc(promo.title||'Promo Spesial')}</h1><p>${esc(promo.caption||'')}</p>`:`<div class="no-promo-state"><div class="success-check">✓</div><h1>Terima Kasih</h1><p>Transaksi Anda telah selesai.</p></div>`}<button class="full touch-button" onclick="setHash('customer-login')">Selesai</button></section>`;
-  }catch(err){target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div><button class="full" onclick="setHash('customer-login')">Selesai</button></section>`;}
+    const transactionPromise=kind==="item"
+      ? rpc("mvp_get_item_redemption",{p_token:token})
+      : rpc("mvp_get_approval",{p_token:token});
+    const [transactionRows,promoRows]=await Promise.all([
+      transactionPromise,
+      rpc("mvp_get_active_promo",{p_outlet_slug:OUTLET_SLUG})
+    ]);
+    const transaction=transactionRows&&transactionRows[0]?transactionRows[0]:{};
+    const promo=promoRows&&promoRows[0]?promoRows[0]:null;
+    const detail=kind==="item"
+      ? `${transaction.item_name||"Gift Item"}`
+      : `${money(transaction.balance_used||0)} • Sisa saldo ${money(transaction.balance_after||0)}`;
+    target.innerHTML=`<section class="promo-customer-card">${brandMiniHtml()}<div class="transaction-success-strip"><span>✓</span><div><b>Transaksi Berhasil</b><small>${esc(detail)}</small></div></div>${promo&&promo.image_data_url?`<img class="promo-customer-image" src="${promo.image_data_url}" alt="${esc(promo.title||"Promo")}"/><h1>${esc(promo.title||"Promo Spesial")}</h1><p>${esc(promo.caption||"")}</p>`:`<div class="no-promo-state"><div class="success-check">✓</div><h1>Terima Kasih</h1><p>Transaksi Anda telah selesai.</p></div>`}<button class="full touch-button" onclick="setHash('customer-login')">Selesai</button></section>`;
+  }catch(err){
+    target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div><button class="full" onclick="setHash('customer-login')">Selesai</button></section>`;
+  }
 }
-
 async function renderReport(){
   const user=requireLogin();if(!user)return;
   mountLayout();setNav();
   const today=new Date();const from=new Date(today.getTime()-6*86400000).toISOString().slice(0,10);const to=today.toISOString().slice(0,10);
-  screen(`<section class="tablet-page">${staffPageHeader("History Transaksi",staffHomeRoute())}<div class="report-filter-bar"><input id="report-from" type="date" value="${from}"/><span>s/d</span><input id="report-to" type="date" value="${to}"/><select id="report-type"><option value="all">Semua Jenis</option><option value="use_balance">Gunakan Saldo</option><option value="topup">Top Up</option><option value="gift_claim">Voucher / Gift</option></select><button id="report-load">Tampilkan</button></div><div id="report-summary" class="report-summary"></div><div id="report-list"></div><div class="report-actions"><button class="touch-button" id="report-pdf">Export PDF</button></div></section>`);
+  screen(`<section class="tablet-page">${staffPageHeader("History Transaksi",staffHomeRoute())}<div class="report-filter-bar"><input id="report-from" type="date" value="${from}"/><span>s/d</span><input id="report-to" type="date" value="${to}"/><select id="report-type"><option value="all">Semua Jenis</option><option value="use_balance">Gunakan Saldo</option><option value="topup">Top Up</option><option value="gift_claim">Voucher / Gift Saldo</option><option value="gift_item_claim">Gift Item Claimed</option><option value="gift_item_redeem">Gift Item Used</option></select><button id="report-load">Tampilkan</button></div><div id="report-summary" class="report-summary"></div><div id="report-list"></div><div class="report-actions"><button class="touch-button" id="report-pdf">Export PDF</button></div></section>`);
   let rows=[];
-  function typeLabel(type){return type==="use_balance"?"Gunakan Saldo":type==="topup"?"Top Up":type==="gift_claim"?"Voucher / Gift":type;}
+  function typeLabel(type){
+    return type==="use_balance"?"Gunakan Saldo"
+      :type==="topup"?"Top Up"
+      :type==="gift_claim"?"Voucher / Gift Saldo"
+      :type==="gift_item_claim"?"Gift Item Claimed"
+      :type==="gift_item_redeem"?"Gift Item Used"
+      :type;
+  }
   function groupRows(){const groups={};rows.forEach(row=>{const key=new Date(row.created_at).toLocaleDateString("sv-SE",{timeZone:"Asia/Jakarta"});(groups[key]||(groups[key]=[])).push(row);});return groups;}
   function draw(){
     const totalTopup=rows.reduce((sum,row)=>sum+Number(row.credit_issued||0),0);const totalUsed=rows.reduce((sum,row)=>sum+Number(row.balance_used||0),0);
     byId("report-summary").innerHTML=`<div><small>Transaksi</small><b>${rows.length}</b></div><div><small>Saldo Masuk</small><b>${money(totalTopup)}</b></div><div><small>Saldo Dipakai</small><b>${money(totalUsed)}</b></div>`;
     const groups=groupRows();const keys=Object.keys(groups).sort().reverse();
-    byId("report-list").innerHTML=keys.length?keys.map(date=>`<section class="daily-report-group"><header><b>${new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</b><span>${groups[date].length} transaksi</span></header>${groups[date].map(row=>`<div class="report-row"><span class="report-time">${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span><b>${esc(typeLabel(row.type))}</b><small>${esc(row.member_name||'-')} • ${esc(row.member_phone||'-')}</small></span><strong class="${row.type==='use_balance'?'minus':'plus'}">${row.type==='use_balance'?'-':'+'}${money(row.type==='use_balance'?row.balance_used:row.credit_issued)}</strong><span class="status-dot">${esc(row.status||'approved')}</span></div>`).join('')}</section>`).join(''):`<div class="empty-state">Belum ada transaksi pada periode ini.</div>`;
+    byId("report-list").innerHTML=keys.length?keys.map(date=>`<section class="daily-report-group"><header><b>${new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</b><span>${groups[date].length} transaksi</span></header>${groups[date].map(row=>`<div class="report-row"><span class="report-time">${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span><b>${esc(typeLabel(row.type))}</b><small>${esc(row.member_name||'-')} • ${esc(row.member_phone||'-')}</small></span><strong class="${row.type==='use_balance'?'minus':'plus'}">${row.type==='gift_item_claim'||row.type==='gift_item_redeem'?'1 Item':`${row.type==='use_balance'?'-':'+'}${money(row.type==='use_balance'?row.balance_used:row.credit_issued)}`}</strong><span class="status-dot">${esc(row.status||'approved')}</span></div>`).join('')}</section>`).join(''):`<div class="empty-state">Belum ada transaksi pada periode ini.</div>`;
   }
   async function load(){byId("report-list").innerHTML=`<div class="empty-state">Loading...</div>`;try{rows=await rpc("s4_staff_transactions_by_date",{p_staff_session_token:user.session_token,p_date_from:byId("report-from").value,p_date_to:byId("report-to").value,p_type:byId("report-type").value})||[];draw();}catch(err){byId("report-list").innerHTML=`<div class="error">${safeError(err)}</div>`;}}
   byId("report-load").onclick=load;
-  byId("report-pdf").onclick=()=>{const groups=groupRows();const html=`<!doctype html><html><head><title>${OUTLET} Transaction Report</title><style>body{font-family:Arial;padding:28px;color:#17211a}h1{margin:0}.day{margin-top:22px;border-top:2px solid #245c38;padding-top:10px}.row{display:grid;grid-template-columns:80px 1fr 140px;padding:8px 0;border-bottom:1px solid #ddd}.amount{text-align:right;font-weight:bold}</style></head><body><h1>${OUTLET} — History Transaksi</h1><p>${byId('report-from').value} s/d ${byId('report-to').value}</p>${Object.keys(groups).sort().reverse().map(date=>`<div class="day"><h3>${date}</h3>${groups[date].map(row=>`<div class="row"><span>${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span>${esc(typeLabel(row.type))} — ${esc(row.member_name||'-')}</span><span class="amount">${money(row.type==='use_balance'?row.balance_used:row.credit_issued)}</span></div>`).join('')}</div>`).join('')}<script>window.onload=()=>window.print();</script></body></html>`;const w=window.open('','_blank');if(!w){alert('Popup diblokir browser.');return;}w.document.write(html);w.document.close();};
+  byId("report-pdf").onclick=()=>{const groups=groupRows();const html=`<!doctype html><html><head><title>${OUTLET} Transaction Report</title><style>body{font-family:Arial;padding:28px;color:#17211a}h1{margin:0}.day{margin-top:22px;border-top:2px solid #245c38;padding-top:10px}.row{display:grid;grid-template-columns:80px 1fr 140px;padding:8px 0;border-bottom:1px solid #ddd}.amount{text-align:right;font-weight:bold}</style></head><body><h1>${OUTLET} — History Transaksi</h1><p>${byId('report-from').value} s/d ${byId('report-to').value}</p>${Object.keys(groups).sort().reverse().map(date=>`<div class="day"><h3>${date}</h3>${groups[date].map(row=>`<div class="row"><span>${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span>${esc(typeLabel(row.type))} — ${esc(row.member_name||'-')}</span><span class="amount">${row.type==='gift_item_claim'||row.type==='gift_item_redeem'?'1 Item':money(row.type==='use_balance'?row.balance_used:row.credit_issued)}</span></div>`).join('')}</div>`).join('')}<script>window.onload=()=>window.print();</script></body></html>`;const w=window.open('','_blank');if(!w){alert('Popup diblokir browser.');return;}w.document.write(html);w.document.close();};
   await load();
 }
 
@@ -1889,7 +1885,7 @@ async function renderCustomerResetHome(){
 function route(){
   const {name}=getRoute();
   const staffRoutes=new Set(["login","owner","owner-summary","transaction","promo-manage","members","gift-generate","report","kasir","member","register","join","topup","use-balance","waiting","success"]);
-  const customerRoutes=new Set(["customer-login","customer-portal","register","join","claim-gift","approve","promo","customer-home","reset-pin","customer-reset-home"]);
+  const customerRoutes=new Set(["customer-login","customer-portal","register","join","claim-gift","approve","approve-item","promo","customer-home","reset-pin","customer-reset-home"]);
   if(PORTAL_MODE==="staff" && !staffRoutes.has(name)){ setHash("login"); return; }
   if(PORTAL_MODE==="customer" && !customerRoutes.has(name)){ setHash("customer-login"); return; }
   if(name==="login")return renderLogin();
@@ -1906,6 +1902,7 @@ function route(){
   if(name==="use-balance")return renderUseBalance();
   if(name==="waiting")return renderWaiting();
   if(name==="approve")return renderApprove();
+  if(name==="approve-item")return renderApproveItem();
   if(name==="promo")return renderPromo();
   if(name==="customer-home")return renderCustomerHome();
   if(name==="customer-reset-home")return renderCustomerResetHome();
