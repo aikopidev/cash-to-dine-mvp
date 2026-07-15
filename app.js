@@ -1,5 +1,5 @@
-/* Cash to Dine MVP v0.6 - Supabase Connected */
-const APP_VERSION = "3.2.4";
+/* White-label Member Dining System */
+const APP_VERSION = "4.0.0";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -22,11 +22,27 @@ function brandMiniHtml(){
   const label=PORTAL_MODE==="staff"
     ? "Kembali ke login staff"
     : "Kembali ke login customer";
-  return `<button type="button" class="mini-brand brand-home-button" onclick="goPortalLogin()" aria-label="${label}"><img src="./cacayo-logo.jpg" alt="CACAYO logo"/><div><b>CACAYO</b><span>CHINESE CALIFORNIAN FUSION FOOD</span></div></button>`;
+  return `<button type="button" class="brand-button" onclick="goPortalLogin()" aria-label="${label}">
+    <img src="./cacayo-logo.jpg" alt="${OUTLET} logo" class="brand-logo-large"/>
+  </button>`;
+}
+function staffHomeRoute(){
+  const u=currentUser();
+  return u&&u.role==="owner" ? "owner" : "kasir";
+}
+function staffPageHeader(title,backRoute=staffHomeRoute(),subtitle=""){
+  return `<div class="page-heading">
+    <button class="back-button" type="button" onclick="setHash('${backRoute}')" aria-label="Kembali">←</button>
+    <div><h1>${esc(title)}</h1>${subtitle?`<p>${esc(subtitle)}</p>`:""}</div>
+  </div>`;
+}
+function touchIcon(name){
+  const icons={transaction:"▣",history:"◷",members:"♙",promo:"▧",voucher:"◇",summary:"▤",use:"▱",topup:"⊕",search:"⌕"};
+  return icons[name]||"•";
 }
 function brandLine(){ return OUTLET_FULL; }
 function randomCode(len=8){ let c=""; for(let i=0;i<len;i++) c += SAFE_ALPHABET[Math.floor(Math.random()*SAFE_ALPHABET.length)]; return c; }
-function memberSeq(){ return "CTD-" + Date.now().toString().slice(-6); }
+function memberSeq(){ return "MBR-" + Date.now().toString().slice(-6); }
 function publicBaseUrl(){ return `${location.origin}/?v=${APP_VERSION}`; }
 function qrImageUrl(data, size=260){ if(!window.CTDQR) throw new Error("Local QR engine not loaded"); return window.CTDQR.toDataURL(String(data), size); }
 function normalizePhone(phone){ const raw=String(phone||"").trim().replace(/[^0-9]/g,""); return raw.startsWith("0") ? "62"+raw.slice(1) : raw; }
@@ -58,8 +74,12 @@ async function rpc(fn, body={}){
 }
 
 function mountLayout(){
-  byId("app").innerHTML = byId("layout-template").innerHTML;
-  byId("outlet-name").textContent = `${OUTLET_FULL} • Supabase v${APP_VERSION}`;
+  byId("app").innerHTML=byId("layout-template").innerHTML;
+  const u=currentUser();
+  const outletName=byId("outlet-name");
+  if(outletName){
+    outletName.textContent=u ? `${u.name||"Staff"} • ${String(u.role||"").toUpperCase()}` : OUTLET;
+  }
   const brandHome=byId("brand-home-link");
   if(brandHome){
     brandHome.onclick=goPortalLogin;
@@ -70,136 +90,145 @@ function mountLayout(){
       }
     };
   }
-  byId("logout-btn").onclick = async()=>{
-    const u=currentUser();
-    try{ if(u?.session_token) await rpc("s3_staff_logout",{p_staff_session_token:u.session_token}); }catch(e){}
-    clearSession(); setHash("login");
+  byId("logout-btn").onclick=async()=>{
+    const user=currentUser();
+    try{
+      if(user?.session_token){
+        await rpc("s3_staff_logout",{p_staff_session_token:user.session_token});
+      }
+    }catch(e){}
+    clearSession();
+    setHash("login");
   };
 }
-function screen(html){ byId("screen").innerHTML = html; }
-function setNav(active){
-  const u=currentUser(); const nav=byId("bottom-nav"); if(!nav||!u) return;
-  if(u.role==="owner"){
-    nav.innerHTML = `<button class="${active==='owner'?'active':''}" onclick="setHash('owner')">Dashboard</button><button class="${active==='members'?'active':''}" onclick="setHash('members')">Members</button><button class="${active==='gift'?'active':''}" onclick="setHash('gift-generate')">Voucher/Gift</button><button class="${active==='report'?'active':''}" onclick="setHash('report')">Report</button><button class="${active==='kasir'?'active':''}" onclick="setHash('kasir')">Kasir</button>`;
-  } else {
-    nav.innerHTML = `<button class="${active==='kasir'?'active':''}" onclick="setHash('kasir')">Kasir</button><button class="${active==='register'?'active':''}" onclick="setHash('join')">Daftar</button><button class="${active==='report'?'active':''}" onclick="setHash('report')">Report</button>`;
-  }
+function screen(html){ byId("screen").innerHTML=html; }
+function setNav(){
+  const nav=byId("bottom-nav");
+  if(nav){nav.innerHTML="";nav.style.display="none";}
+}
+function staffHomeHtml(user){
+  const ownerTools=user.role==="owner" ? `
+    <div class="secondary-tools">
+      <button class="secondary-tool" onclick="setHash('gift-generate')"><span>${touchIcon('voucher')}</span><b>Voucher & Gift</b></button>
+      <button class="secondary-tool" onclick="setHash('owner-summary')"><span>${touchIcon('summary')}</span><b>Ringkasan</b></button>
+    </div>` : "";
+  return `
+    <section class="staff-home-shell">
+      <div class="staff-logo-stage">
+        <img src="./cacayo-logo.jpg" alt="${OUTLET} logo" class="staff-home-logo"/>
+      </div>
+      <div class="touch-menu three">
+        <button class="touch-menu-card primary" onclick="setHash('transaction')">
+          <span class="touch-menu-icon">${touchIcon('transaction')}</span>
+          <b>Transaksi</b><small>Gunakan Saldo / Top Up</small>
+        </button>
+        <button class="touch-menu-card" onclick="setHash('report')">
+          <span class="touch-menu-icon">${touchIcon('history')}</span>
+          <b>History Transaksi</b><small>Report per hari</small>
+        </button>
+        <button class="touch-menu-card" onclick="setHash('members')">
+          <span class="touch-menu-icon">${touchIcon('members')}</span>
+          <b>Daftar Member</b><small>Cari & lihat history</small>
+        </button>
+      </div>
+      <button class="promo-shortcut" onclick="setHash('promo-manage')">
+        <span>${touchIcon('promo')}</span><span><b>Kelola Promo Customer</b><small>Upload gambar yang tampil setelah transaksi</small></span><span>→</span>
+      </button>
+      ${ownerTools}
+    </section>`;
 }
 
 function renderLogin(){
-  if(PORTAL_MODE !== "staff"){ setHash("customer-login"); return; }
-  byId("app").innerHTML = `<div class="login-wrap"><section class="login-card">${brandMiniHtml()}<div class="logo-mark">CTD</div><h1>Staff Operations</h1><p>Portal internal CACAYO untuk owner dan kasir.</p><form id="login-form"><label>Username Staff</label><input id="username" autocomplete="username" placeholder="Username"/><label>Password Staff</label><input id="password" type="password" autocomplete="current-password" placeholder="••••••••"/><button class="full" style="margin-top:14px">Login Staff</button></form><div id="login-result" style="margin-top:12px"></div></section></div>`;
-  byId("login-form").onsubmit = async (e)=>{
-    e.preventDefault();
+  if(PORTAL_MODE!=="staff"){setHash("customer-login");return;}
+  byId("app").innerHTML=`<div class="login-wrap white-label-login"><section class="login-card clean-login">
+    ${brandMiniHtml()}
+    <h1>Staff Login</h1>
+    <p>Masuk untuk mengelola transaksi dan member.</p>
+    <form id="login-form">
+      <label>Username</label><input id="username" autocomplete="username" placeholder="Username"/>
+      <label>Password</label><input id="password" type="password" autocomplete="current-password" placeholder="Password"/>
+      <button class="full touch-button" style="margin-top:16px">Login</button>
+    </form>
+    <div id="login-result" style="margin-top:12px"></div>
+  </section></div>`;
+  byId("login-form").onsubmit=async(event)=>{
+    event.preventDefault();
     const box=byId("login-result");
-    box.innerHTML=`<div class="notice">Logging in securely...</div>`;
+    box.innerHTML=`<div class="notice">Memeriksa akun...</div>`;
     try{
       const rows=await rpc("s3_staff_login",{
         p_username:byId("username").value.trim(),
         p_password:byId("password").value
       });
-      if(!rows||!rows.length) throw new Error("Login salah.");
-      const d=rows[0];
-      if(d.login_success===false) throw new Error(d.error_message||"Login salah.");
-      saveSession(d);
-      setHash(d.role==="owner"?"owner":"kasir");
-    }catch(err){ box.innerHTML=`<div class="error">${safeError(err)}</div>`; }
+      if(!rows||!rows.length)throw new Error("Login salah.");
+      const data=rows[0];
+      if(data.login_success===false)throw new Error(data.error_message||"Login salah.");
+      saveSession(data);
+      setHash(data.role==="owner"?"owner":"kasir");
+    }catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;}
   };
 }
 
 async function renderKasir(){
-  const user=requireLogin(); if(!user) return; mountLayout(); setNav("kasir");
+  const user=requireLogin();if(!user)return;
+  mountLayout();setNav();
+  screen(staffHomeHtml(user));
+}
+
+async function renderTransaction(){
+  const user=requireLogin();if(!user)return;
+  mountLayout();setNav();
   screen(`
-    <section class="card">
-      <h1>Kasir Home</h1>
-      <p>Ketik nomor HP customer. Setelah minimal 7 digit, hasil yang match akan langsung muncul.</p>
-      <form id="search-form">
-        <label>Cari Member by Nomor HP</label>
-        <input id="phone" inputmode="numeric" placeholder="Contoh: 6285530..." autocomplete="off"/>
-        <div class="search-hint">Minimal 7 digit. Bisa ketik 08 atau 62, sistem akan normalisasi ke 62.</div>
-        <div id="live-search-result" class="list" style="margin-top:12px"></div>
-        <button class="full" style="margin-top:12px">Cari Exact / Lanjut</button>
-      </form>
-      <div id="search-result" style="margin-top:12px"></div>
-    </section>
-
-    <section class="card">
-      <h2>Kasir Actions</h2>
-      <div class="grid two">
-        <button onclick="document.getElementById('phone').focus()">Top Up Member Lama</button>
-        <button class="secondary" onclick="document.getElementById('phone').focus()">Gunakan Saldo Member</button>
+    <section class="tablet-page">
+      ${staffPageHeader("Transaksi",staffHomeRoute(),"Pilih jenis transaksi lalu cari member")}
+      <div class="transaction-choice">
+        <button class="transaction-choice-card active" data-action="use">
+          <span>${touchIcon('use')}</span><b>Gunakan Saldo</b>
+        </button>
+        <button class="transaction-choice-card" data-action="topup">
+          <span>${touchIcon('topup')}</span><b>Top Up</b>
+        </button>
       </div>
-      <div class="notice" style="margin-top:12px">
-        Untuk top up member lama: search nomor HP → pilih member → klik <b>Top Up Saldo</b>.
-      </div>
-    </section>
-
-    <section class="card">
-      <h3>Quick Action</h3>
-      <div class="grid two">
-        <button onclick="setHash('join')">Daftar Member Baru</button>
-        <button class="secondary" onclick="setHash('report')">Transaksi Report</button>
-      </div>
-    </section>
-  `);
-
-  const phoneInput = byId("phone");
-  const liveBox = byId("live-search-result");
-  let searchTimer = null;
-  let lastQuery = "";
-
-  async function runLiveSearch(){
-    const normalized = normalizePhone(phoneInput.value);
-    if(normalized.length < 7){
-      liveBox.innerHTML = `<div class="notice">Ketik minimal 7 digit untuk menampilkan kandidat member.</div>`;
-      return;
-    }
-    if(normalized === lastQuery) return;
-    lastQuery = normalized;
-    liveBox.innerHTML = `<div class="notice">Mencari member...</div>`;
+      <section class="surface-card member-picker-card">
+        <label>Cari Member</label>
+        <div class="search-box-large"><span>${touchIcon('search')}</span><input id="transaction-member-search" placeholder="Nama atau nomor WhatsApp" autocomplete="off"/></div>
+        <div id="transaction-member-results" class="member-touch-list"><div class="empty-state">Ketik minimal 3 karakter untuk mencari member.</div></div>
+      </section>
+    </section>`);
+  let selectedAction="use";
+  let timer=null;
+  document.querySelectorAll(".transaction-choice-card").forEach(button=>{
+    button.onclick=()=>{
+      document.querySelectorAll(".transaction-choice-card").forEach(item=>item.classList.remove("active"));
+      button.classList.add("active");
+      selectedAction=button.dataset.action||"use";
+      byId("transaction-member-search").focus();
+    };
+  });
+  const input=byId("transaction-member-search");
+  const results=byId("transaction-member-results");
+  async function search(){
+    const query=input.value.trim();
+    if(query.length<3){results.innerHTML=`<div class="empty-state">Ketik minimal 3 karakter untuk mencari member.</div>`;return;}
+    results.innerHTML=`<div class="empty-state">Mencari member...</div>`;
     try{
-      const rows = await rpc("s3_search_members", {p_staff_session_token:user.session_token, p_query:normalized});
-      if(!rows || !rows.length){
-        liveBox.innerHTML = `
-          <div class="notice">
-            Tidak ada member yang match <b>${normalized}</b>.<br>
-            <button class="ghost full" style="margin-top:8px" type="button" onclick="setHash('join',{phone:'${normalized}'})">Daftarkan Nomor Ini</button>
-          </div>`;
+      const rows=await rpc("s3_search_members",{p_staff_session_token:user.session_token,p_query:query});
+      if(!rows||!rows.length){
+        results.innerHTML=`<div class="empty-state">Member tidak ditemukan.<button class="ghost full" onclick="setHash('join',{phone:'${esc(normalizePhone(query))}'})">+ Daftar Member Baru</button></div>`;
         return;
       }
-      liveBox.innerHTML = rows.map(m => `
-        <div class="member-action-row">
-          <div>
-            <div class="title">${esc(m.name)}</div>
-            <div class="meta">${esc(m.phone)} • ${esc(m.member_code)} • ${m.status}</div>
-            <div class="balance">Saldo: ${money(m.balance)}</div>
-          </div>
-          <button type="button" class="secondary" onclick="setHash('topup',{phone:'${esc(m.phone)}'})">Top Up</button>
-          <button type="button" onclick="setHash('use-balance',{phone:'${esc(m.phone)}'})">Gunakan</button>
-        </div>
-      `).join("");
-    }catch(err){
-      liveBox.innerHTML = `<div class="error">${safeError(err)}</div>`;
-    }
+      results.innerHTML=rows.map(member=>`
+        <button class="member-touch-row" type="button" onclick="setHash('${selectedAction==='topup'?'topup':'use-balance'}',{phone:'${esc(member.phone)}'})">
+          <span class="member-avatar">${esc(String(member.name||'?').charAt(0).toUpperCase())}</span>
+          <span class="member-touch-main"><b>${esc(member.name)}</b><small>${esc(member.phone)} • ${String(member.status||'active').toUpperCase()}</small></span>
+          <span class="member-touch-balance"><small>Saldo</small><b>${money(member.balance)}</b></span><span class="chevron">›</span>
+        </button>`).join("");
+    }catch(err){results.innerHTML=`<div class="error">${safeError(err)}</div>`;}
   }
-
-  phoneInput.addEventListener("input",()=>{
-    clearTimeout(searchTimer);
-    searchTimer = setTimeout(runLiveSearch, 350);
-  });
-
-  byId("search-form").onsubmit=(e)=>{
-    e.preventDefault();
-    const phone = normalizePhone(phoneInput.value);
-    if(!phone){
-      byId("search-result").innerHTML = `<div class="error">Masukkan nomor HP dulu.</div>`;
-      return;
-    }
-    setHash("member",{phone});
-  };
-
-  liveBox.innerHTML = `<div class="notice">Ketik nomor HP customer untuk mulai search.</div>`;
+  input.oninput=()=>{clearTimeout(timer);timer=setTimeout(search,300);};
+  input.focus();
 }
+
 async function fetchMemberByPhone(phone){ const u=currentUser(); const rows=await rpc("s3_search_member",{p_staff_session_token:u.session_token, p_phone:normalizePhone(phone)}); return rows&&rows.length?rows[0]:null; }
 
 function historyListHtml(rows, emptyText="Belum ada transaksi."){
@@ -373,7 +402,7 @@ async function renderMember(){
       </section>
       <section class="card">
         <h2>Riwayat Transaksi Customer</h2>
-        <p>Kasir dan owner bisa melihat history saldo customer. Detail pembayaran POS tidak dicatat di CTD.</p>
+        <p>Kasir dan owner bisa melihat history saldo customer. Detail pembayaran POS tidak dicatat di sistem ini.</p>
         ${historyError ? `<div class="error">${historyError}</div>` : historyListHtml(historyRows)}
       </section>
       ${resetControls}
@@ -703,150 +732,72 @@ async function renderCustomerHome(){
 }
 
 async function renderApprove(){
-  const {params}=getRoute();
-  const token=params.token;
-  byId("app").innerHTML=`<main style="padding:16px;max-width:560px;margin:auto"></main>`;
+  const {params}=getRoute();const token=params.token;
+  byId("app").innerHTML=`<main class="customer-shell"></main>`;
   const target=document.querySelector("main");
-  target.innerHTML=`<section class="card"><h1>Loading approval...</h1></section>`;
-
+  target.innerHTML=`<div class="empty-state">Memuat transaksi...</div>`;
   try{
     const rows=await rpc("mvp_get_approval",{p_token:token});
-    if(!rows||!rows.length) throw new Error("Approval tidak ditemukan.");
-    const p=rows[0];
-
+    if(!rows||!rows.length)throw new Error("Transaksi tidak ditemukan.");
+    const request=rows[0];
+    let pin="";
     target.innerHTML=`
-      <section class="card">
+      <section class="customer-confirm-card">
         ${brandMiniHtml()}
-        <h1>Approve Pemakaian Saldo</h1>
-        <p>${OUTLET_FULL}</p>
-        <div class="approval-alert">
-          <div style="font-weight:900">⚠️ Permintaan Pemakaian Saldo</div>
-          <div class="big-money">${money(p.balance_used)}</div>
-          <div>Pastikan nominal ini sesuai instruksi kasir di POS sebelum memasukkan PIN.</div>
-          <div>Saldo setelah approval: <b>${money(p.balance_after)}</b>.</div>
-        </div>
-        <div class="item"><div class="title">Member</div><div class="meta">${esc(p.member_name)} • ${esc(p.member_phone)}</div></div>
-        <form id="approve-form">
-          <label>PIN Membership 6 Digit</label>
-          <input id="pass" type="password" inputmode="numeric" maxlength="6" placeholder="Masukkan PIN 6 digit" required/>
-          <button class="ok full" style="margin-top:14px">Approve Pemakaian Saldo</button>
-        </form>
-        <button class="ghost full" style="margin-top:8px" id="rejectBtn">Tolak</button>
-        <div id="approve-result" style="margin-top:12px"></div>
-      </section>
-    `;
-
-    if(p.status!=="waiting"){
-      byId("approve-result").innerHTML=`<div class="notice">Status request: ${p.status}</div>`;
-    }
-
-    byId("rejectBtn").onclick=async()=>{
+        <button class="back-button customer-back" onclick="setHash('customer-login')">←</button>
+        <h1>Gunakan Saldo</h1><div class="confirm-amount">${money(request.balance_used)}</div>
+        <p>Masukkan PIN Anda</p>
+        <div class="pin-dots" id="pin-dots">${Array.from({length:6},()=>'<i></i>').join('')}</div>
+        <div class="numeric-keypad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" data-pin="${n}">${n}</button>`).join('')}<button type="button" class="key-clear">C</button><button type="button" data-pin="0">0</button><button type="button" class="key-back">⌫</button></div>
+        <button class="full touch-button" id="approve-pin-button" disabled>Approve</button>
+        <button class="text-button" id="rejectBtn">Tolak Transaksi</button>
+        <div id="approve-result"></div>
+      </section>`;
+    const dots=()=>document.querySelectorAll("#pin-dots i").forEach((dot,index)=>dot.classList.toggle("filled",index<pin.length));
+    document.querySelectorAll("[data-pin]").forEach(button=>button.onclick=()=>{if(pin.length<6){pin+=button.dataset.pin;dots();byId("approve-pin-button").disabled=pin.length!==6;}});
+    document.querySelector(".key-clear").onclick=()=>{pin="";dots();byId("approve-pin-button").disabled=true;};
+    document.querySelector(".key-back").onclick=()=>{pin=pin.slice(0,-1);dots();byId("approve-pin-button").disabled=pin.length!==6;};
+    byId("rejectBtn").onclick=async()=>{try{await rpc("mvp_reject_approval",{p_token:token});byId("approve-result").innerHTML=`<div class="error">Transaksi ditolak.</div>`;}catch(err){byId("approve-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}};
+    byId("approve-pin-button").onclick=async()=>{
+      const box=byId("approve-result");box.innerHTML=`<div class="notice">Memproses...</div>`;byId("approve-pin-button").disabled=true;
       try{
-        await rpc("mvp_reject_approval",{p_token:token});
-        byId("approve-result").innerHTML=`<div class="error">Transaksi ditolak. Saldo tidak berubah.</div>`;
-      }catch(err){
-        byId("approve-result").innerHTML=`<div class="error">${safeError(err)}</div>`;
-      }
+        const approvalRows=await rpc("mvp_approve_balance_use",{p_token:token,p_password:pin});
+        const result=approvalRows&&approvalRows[0]?approvalRows[0]:{};
+        if(result.approval_success===false){box.innerHTML=`<div class="error">${esc(result.error_message||'PIN salah.')}</div>`;pin="";dots();return;}
+        target.innerHTML=`<section class="customer-confirm-card success-transition">${brandMiniHtml()}<div class="success-check">✓</div><h1>Transaksi Berhasil</h1><div class="confirm-amount">${money(request.balance_used)}</div><p>Sisa saldo ${money(result.balance_after??request.balance_after??0)}</p></section>`;
+        setTimeout(()=>setHash("promo",{token}),900);
+      }catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;pin="";dots();}
     };
-
-    byId("approve-form").onsubmit=async(e)=>{
-      e.preventDefault();
-      const box=byId("approve-result");
-      box.innerHTML=`<div class="notice">Approving...</div>`;
-      try{
-        const rows=await rpc("mvp_approve_balance_use",{p_token:token,p_password:byId("pass").value});
-        const d=rows&&rows[0]?rows[0]:{};
-        if(d.approval_success === false){
-          box.innerHTML=`<div class="error">${d.error_message || "PIN salah."}</div>`;
-          return;
-        }
-        const saldoAfter = d.balance_after ?? p.balance_after ?? 0;
-
-        target.innerHTML=`
-          <section class="card">
-            ${brandMiniHtml()}
-            <div class="customer-home-header">
-              <div class="check">✓</div>
-              <h1>Saldo Berhasil Dipakai</h1>
-              <p>Approval berhasil. Form PIN sudah ditutup.</p>
-            </div>
-            <div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div>
-            <div class="item"><div class="title">Sisa Saldo</div><div class="meta"><b>${money(saldoAfter)}</b></div></div>
-            <div class="success" style="margin-top:12px">Transaksi berhasil. Silakan kembali ke kasir untuk menyelesaikan bill di POS.</div>
-            <button class="full" style="margin-top:14px" onclick="location.hash='customer-home?token=${token}'">HOME Customer</button>
-          </section>
-          ${customerTopupInfoHtml()}
-        `;
-      }catch(err){
-        box.innerHTML=`<div class="error">${safeError(err)}</div>`;
-      }
-    };
-  }catch(err){
-    target.innerHTML=`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`;
-  }
+  }catch(err){target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div></section>`;}
 }
+
 async function renderSuccess(){
-  const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); try{ const rows=await rpc("mvp_get_approval",{p_token:params.token}); const p=rows&&rows[0]; if(!p) throw new Error("Approval not found"); screen(`<section class="card"><h1>Saldo Berhasil Dipakai ✅</h1><div class="item"><div class="title">Member</div><div class="meta">${esc(p.member_name)} • ${esc(p.member_phone)}</div></div><div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div><div class="item"><div class="title">Saldo Sisa</div><div class="meta">${money(p.balance_after)}</div></div><div class="notice">Kasir tetap validasi manual di POS: masukkan payment Voucher/Cash to Dine sebesar ${money(p.balance_used)}. Sisa bill, kalau ada, dibayar QRIS/Cash/Card di POS.</div><button class="full" style="margin-top:12px" onclick="setHash('kasir')">Transaksi Baru</button></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`); }
+  const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); try{ const rows=await rpc("mvp_get_approval",{p_token:params.token}); const p=rows&&rows[0]; if(!p) throw new Error("Approval not found"); screen(`<section class="card"><h1>Saldo Berhasil Dipakai ✅</h1><div class="item"><div class="title">Member</div><div class="meta">${esc(p.member_name)} • ${esc(p.member_phone)}</div></div><div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div><div class="item"><div class="title">Saldo Sisa</div><div class="meta">${money(p.balance_after)}</div></div><div class="notice">Kasir tetap validasi manual di POS: masukkan payment Voucher/Member Dining sebesar ${money(p.balance_used)}. Sisa bill, kalau ada, dibayar QRIS/Cash/Card di POS.</div><button class="full" style="margin-top:12px" onclick="setHash('kasir')">Transaksi Baru</button></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`); }
 }
 
 async function renderOwner(){
-  const u=requireLogin(); if(!u)return;
-  if(u.role!=="owner"){setHash("kasir");return;}
-  mountLayout(); setNav("owner");
-  screen(`
-    <section class="card">
-      <h1>Owner Dashboard</h1>
-      <p>${OUTLET} • Supabase connected. Ringkasan operasional member, voucher, dan saldo.</p>
-      <div id="dashboard-summary" class="dashboard-grid">
-        <div class="dashboard-card"><div class="label">Members</div><div class="value">-</div></div>
-        <div class="dashboard-card"><div class="label">Total Saldo Member</div><div class="value">-</div></div>
-        <div class="dashboard-card"><div class="label">Voucher Available</div><div class="value">-</div></div>
-        <div class="dashboard-card"><div class="label">Voucher Terdaftar / Claimed</div><div class="value">-</div></div>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Quick Access</h2>
-      <div class="action-grid">
-        <button class="action-card" onclick="setHash('members')">
-          <div class="title">All Members</div>
-          <div class="desc">Lihat semua member yang pernah daftar, lengkap dengan nama, nomor telpon, saldo, dan export TXT/PDF.</div>
-        </button>
-        <button class="action-card" onclick="setHash('gift-generate')">
-          <div class="title">Voucher & Gift</div>
-          <div class="desc">Generate Voucher untuk member baru dan Gift untuk existing member.</div>
-        </button>
-        <button class="action-card" onclick="setHash('report')">
-          <div class="title">Transaction Report</div>
-          <div class="desc">Lihat transaksi top up, gift claim, dan penggunaan saldo.</div>
-        </button>
-        <button class="action-card" onclick="setHash('kasir')">
-          <div class="title">Kasir Mode</div>
-          <div class="desc">Search member, top up, request saldo, dan approval QR.</div>
-        </button>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>System Status</h2>
-      <div class="success">Connected to Supabase: ${SUPABASE_URL}</div>
-      <p class="meta">Dashboard ini mengambil data langsung dari cloud, bukan local browser.</p>
-    </section>
-  `);
-
-  try{
-    const rows = await rpc("s3_owner_dashboard_summary", {p_staff_session_token:u.session_token});
-    const s = rows && rows[0] ? rows[0] : {};
-    byId("dashboard-summary").innerHTML = `
-      <div class="dashboard-card"><div class="label">Total Members</div><div class="value">${s.total_members || 0}</div></div>
-      <div class="dashboard-card"><div class="label">Total Saldo Member</div><div class="value">${money(s.total_wallet_balance || 0)}</div></div>
-      <div class="dashboard-card"><div class="label">Voucher Available</div><div class="value">${s.available_vouchers || 0}</div></div>
-      <div class="dashboard-card"><div class="label">Terdaftar / Claimed</div><div class="value">${Number(s.registered_vouchers || 0) + Number(s.claimed_vouchers || 0)}</div></div>
-    `;
-  }catch(err){
-    byId("dashboard-summary").innerHTML = `<div class="error" style="grid-column:1/-1">${safeError(err)}</div>`;
-  }
+  const user=requireLogin();if(!user)return;
+  if(user.role!=="owner"){setHash("kasir");return;}
+  mountLayout();setNav();
+  screen(staffHomeHtml(user));
 }
+
+async function renderOwnerSummary(){
+  const user=requireLogin();if(!user)return;
+  if(user.role!=="owner"){setHash("kasir");return;}
+  mountLayout();setNav();
+  screen(`<section class="tablet-page">${staffPageHeader("Ringkasan",staffHomeRoute())}<div id="dashboard-summary" class="dashboard-grid"><div class="dashboard-card"><div class="label">Members</div><div class="value">-</div></div><div class="dashboard-card"><div class="label">Total Saldo</div><div class="value">-</div></div><div class="dashboard-card"><div class="label">Voucher Available</div><div class="value">-</div></div><div class="dashboard-card"><div class="label">Voucher / Gift Terpakai</div><div class="value">-</div></div></div></section>`);
+  try{
+    const rows=await rpc("s3_owner_dashboard_summary",{p_staff_session_token:user.session_token});
+    const data=rows&&rows[0]?rows[0]:{};
+    byId("dashboard-summary").innerHTML=`
+      <div class="dashboard-card"><div class="label">Total Member</div><div class="value">${data.total_members||0}</div></div>
+      <div class="dashboard-card"><div class="label">Total Saldo</div><div class="value">${money(data.total_wallet_balance||0)}</div></div>
+      <div class="dashboard-card"><div class="label">Voucher Available</div><div class="value">${data.available_vouchers||0}</div></div>
+      <div class="dashboard-card"><div class="label">Terdaftar / Claimed</div><div class="value">${Number(data.registered_vouchers||0)+Number(data.claimed_vouchers||0)}</div></div>`;
+  }catch(err){byId("dashboard-summary").innerHTML=`<div class="error">${safeError(err)}</div>`;}
+}
+
 async function renderGiftGenerate(){
   const u=requireLogin();
   if(!u)return;
@@ -1357,132 +1308,46 @@ Voucher hanya dapat digunakan 1 kali untuk pendaftaran member baru.`;
   await loadCodes();
 }
 async function renderMembers(){
-  const u=requireLogin(); if(!u)return; if(u.role!=="owner"){setHash("kasir");return;} mountLayout(); setNav("members");
+  const user=requireLogin();if(!user)return;
+  mountLayout();setNav();
   screen(`
-    <section class="card">
-      <h1>All Members</h1>
-      <p>List simple semua member aktif. Owner bisa buka detail member untuk reset PIN atau delete member.</p>
-      <div class="voucher-toolbar">
-        <input id="member-query" placeholder="Search nama / nomor HP..." autocomplete="off" />
-        <button class="secondary" id="export-txt" type="button">Export TXT</button>
-        <button class="ghost" id="export-pdf" type="button">Export PDF / Print</button>
-        <button class="ghost" id="refresh-members" type="button">Refresh</button>
+    <section class="tablet-page">
+      ${staffPageHeader("Daftar Member",staffHomeRoute())}
+      <div class="member-page-toolbar">
+        <div class="search-box-large"><span>${touchIcon('search')}</span><input id="member-query" placeholder="Cari nama / nomor WhatsApp" autocomplete="off"/></div>
+        <button class="touch-button" onclick="setHash('join')">+ Member Baru</button>
       </div>
-      <div id="member-summary" class="success">Loading member...</div>
-    </section>
-    <section class="card">
-      <h2>Member List</h2>
-      <div id="member-list"></div>
-    </section>
-  `);
-
-  let members = [];
-
-  function visibleRows(){
-    const q = byId("member-query").value.trim().toLowerCase();
-    return members.filter(m =>
-      !q || String(m.name||"").toLowerCase().includes(q) || String(m.phone||"").includes(q) || String(m.member_code||"").toLowerCase().includes(q)
-    );
+      <div class="member-summary-line" id="member-summary">Loading...</div>
+      <div id="member-list" class="member-touch-list"><div class="empty-state">Loading member...</div></div>
+      <div class="report-actions"><button class="ghost" id="export-members-pdf">Export PDF</button><button class="ghost" id="refresh-members">Refresh</button></div>
+    </section>`);
+  let members=[];
+  function visible(){
+    const q=byId("member-query").value.trim().toLowerCase();
+    return members.filter(m=>!q||String(m.name||"").toLowerCase().includes(q)||String(m.phone||"").includes(q));
   }
-
-  function renderMemberRows(){
-    const rows = visibleRows();
-    const totalBalance = rows.reduce((a,m)=>a+Number(m.balance||0),0);
-    byId("member-summary").innerHTML = `<b>${rows.length}</b> member ditampilkan dari total <b>${members.length}</b> member • Total saldo tampil: <b>${money(totalBalance)}</b>`;
-    if(!rows.length){
-      byId("member-list").innerHTML = `<div class="notice">Tidak ada member.</div>`;
-      return;
-    }
-    byId("member-list").innerHTML = `
-      <div class="member-table-wrap">
-        <table class="member-table">
-          <thead>
-            <tr>
-              <th>No</th>
-              <th>Nama</th>
-              <th>No Telpon</th>
-              <th>Member ID</th>
-              <th>Saldo</th>
-              <th>Status</th>
-              <th>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map((m,i)=>`
-              <tr>
-                <td>${i+1}</td>
-                <td class="name">${esc(m.name || "-")}</td>
-                <td>${esc(m.phone || "-")}</td>
-                <td>${esc(m.member_code || "-")}</td>
-                <td><b>${money(m.balance || 0)}</b></td>
-                <td>${m.status || "active"}</td>
-                <td><button class="ghost" onclick="setHash('member',{phone:'${esc(m.phone)}'})">Open</button></td>
-              </tr>
-            `).join("")}
-          </tbody>
-        </table>
-      </div>
-    `;
+  function draw(){
+    const rows=visible();
+    byId("member-summary").textContent=`${rows.length} dari ${members.length} member`;
+    byId("member-list").innerHTML=rows.length?rows.map(member=>`
+      <button class="member-touch-row" onclick="setHash('member',{phone:'${esc(member.phone)}'})">
+        <span class="member-avatar">${esc(String(member.name||'?').charAt(0).toUpperCase())}</span>
+        <span class="member-touch-main"><b>${esc(member.name||'-')}</b><small>${esc(member.phone||'-')}</small></span>
+        <span class="member-touch-balance"><small>Saldo</small><b>${money(member.balance||0)}</b></span><span class="chevron">›</span>
+      </button>`).join(""):`<div class="empty-state">Tidak ada member.</div>`;
   }
-
-  function memberText(rows){
-    const lines = [];
-    lines.push("CASH TO DINE - MEMBER LIST");
-    lines.push(`Export: ${new Date().toLocaleString("id-ID")}`);
-    lines.push(`Total: ${rows.length} member`);
-    lines.push("");
-    rows.forEach((m,i)=>{
-      lines.push(`${i+1}. ${esc(m.name || "-")} | ${esc(m.phone || "-")} | ${esc(m.member_code || "-")} | Saldo: ${money(m.balance || 0)} | Status: ${m.status || "active"}`);
-    });
-    return lines.join("\n");
+  async function load(){
+    try{members=await rpc("s3_list_members",{p_staff_session_token:user.session_token})||[];draw();}
+    catch(err){byId("member-list").innerHTML=`<div class="error">${safeError(err)}</div>`;}
   }
-
-  async function loadMembers(){
-    byId("member-list").innerHTML = `<div class="notice">Loading member...</div>`;
-    try{
-      members = await rpc("s3_list_members", {p_staff_session_token:u.session_token});
-      members = members || [];
-      renderMemberRows();
-    }catch(err){
-      byId("member-list").innerHTML = `<div class="error">${safeError(err)}</div>`;
-    }
-  }
-
-  byId("member-query").addEventListener("input", renderMemberRows);
-  byId("refresh-members").onclick = loadMembers;
-  byId("export-txt").onclick = ()=>{
-    const text = memberText(visibleRows());
-    const blob = new Blob([text], {type:"text/plain;charset=utf-8"});
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `cash-to-dine-members-${new Date().toISOString().slice(0,10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+  byId("member-query").oninput=draw;
+  byId("refresh-members").onclick=load;
+  byId("export-members-pdf").onclick=()=>{
+    const rows=visible();
+    const html=`<!doctype html><html><head><title>${OUTLET} Member List</title><style>body{font-family:Arial;padding:24px;color:#17211a}h1{margin:0 0 4px}table{border-collapse:collapse;width:100%;margin-top:18px}th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}th{background:#eef4ef}</style></head><body><h1>${OUTLET} — Daftar Member</h1><div>${new Date().toLocaleString('id-ID')}</div><table><thead><tr><th>No</th><th>Nama</th><th>WhatsApp</th><th>Saldo</th><th>Status</th></tr></thead><tbody>${rows.map((m,i)=>`<tr><td>${i+1}</td><td>${esc(m.name||'-')}</td><td>${esc(m.phone||'-')}</td><td>${money(m.balance||0)}</td><td>${esc(m.status||'active')}</td></tr>`).join('')}</tbody></table><script>window.onload=()=>window.print();</script></body></html>`;
+    const w=window.open("","_blank");if(!w){alert("Popup diblokir browser.");return;}w.document.write(html);w.document.close();
   };
-  byId("export-pdf").onclick = ()=>{
-    const rows = visibleRows();
-    const html = `
-      <!doctype html><html><head><title>Cash to Dine Member List</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:24px;color:#111827}
-        h1{margin-bottom:4px}
-        table{border-collapse:collapse;width:100%;margin-top:18px}
-        th,td{border:1px solid #ddd;padding:8px;text-align:left;font-size:12px}
-        th{background:#f3f4f6}
-      </style></head><body>
-      <h1>Cash to Dine - Member List</h1>
-      <div>Export: ${new Date().toLocaleString("id-ID")}</div>
-      <div>Total: ${rows.length} member</div>
-      <table><thead><tr><th>No</th><th>Nama</th><th>No Telpon</th><th>Member ID</th><th>Saldo</th><th>Status</th></tr></thead>
-      <tbody>${rows.map((m,i)=>`<tr><td>${i+1}</td><td>${esc(m.name||"-")}</td><td>${esc(m.phone||"-")}</td><td>${esc(m.member_code||"-")}</td><td>${money(m.balance||0)}</td><td>${m.status||"active"}</td></tr>`).join("")}</tbody></table>
-      <script>window.onload=()=>window.print();</script></body></html>`;
-    const w = window.open("", "_blank");
-    w.document.write(html);
-    w.document.close();
-  };
-
-  await loadMembers();
+  await load();
 }
 
 function requireCustomerSession(){
@@ -1498,153 +1363,82 @@ function renderCustomerLogin(){
   clearSession();
   const {params}=getRoute();
   const claimCode=String(params.claim||"").trim().toUpperCase();
-  byId("app").innerHTML=`<main style="padding:16px;max-width:560px;margin:auto"></main>`;
+  byId("app").innerHTML=`<main class="customer-shell login-customer-shell"></main>`;
   const target=document.querySelector("main");
   target.innerHTML=`
-    <section class="card">
+    <section class="customer-login-card">
       ${brandMiniHtml()}
-      <h1>Customer Portal</h1>
-      <p>Login menggunakan nomor WhatsApp dan PIN untuk melihat saldo serta riwayat transaksi.</p>
-      ${claimCode
-        ? `<div class="notice">Login untuk melihat dan claim Gift Code <b>${esc(claimCode)}</b>.</div>`
-        : ""}
+      <h1>Selamat Datang</h1>
+      <p>Masuk untuk melihat saldo Dining.</p>
+      ${claimCode?`<div class="notice">Login untuk claim Gift <b>${esc(claimCode)}</b>.</div>`:""}
       <form id="customer-login-form">
-        <label>Nomor WhatsApp</label>
-        <input id="customer-phone" inputmode="numeric" placeholder="628xxxxxxxxxx" autocomplete="tel" required/>
-        <label>PIN 6 Digit</label>
-        <input id="customer-pin" type="password" inputmode="numeric" maxlength="6" placeholder="Masukkan PIN" required/>
-        <button class="full" style="margin-top:14px">Login Customer</button>
+        <label>Nomor WhatsApp</label><input id="customer-phone" inputmode="numeric" placeholder="08xxxxxxxxxx" autocomplete="tel" required/>
+        <label>PIN</label><input id="customer-pin" type="password" inputmode="numeric" maxlength="6" placeholder="6 digit PIN" required/>
+        <button class="full touch-button" style="margin-top:16px">Login</button>
       </form>
       <div id="customer-login-result" style="margin-top:12px"></div>
-      ${claimCode
-        ? ""
-        : `<div class="divider"></div>
-           <button class="ghost full" onclick="setHash('join')">Daftar Member Baru</button>`}
-    </section>
-  `;
-
-  byId("customer-login-form").onsubmit = async(e)=>{
-    e.preventDefault();
+      ${claimCode?"":`<button class="text-button" onclick="setHash('join')">Belum menjadi member? Daftar</button>`}
+    </section>`;
+  byId("customer-login-form").onsubmit=async(event)=>{
+    event.preventDefault();
     const box=byId("customer-login-result");
     const phone=normalizePhone(byId("customer-phone").value);
     const pin=byId("customer-pin").value.trim();
-
-    if(!/^[0-9]{6}$/.test(pin)){
-      box.innerHTML=`<div class="error">PIN wajib 6 digit angka.</div>`;
-      return;
-    }
-
-    box.innerHTML=`<div class="notice">Login customer...</div>`;
+    if(!/^[0-9]{6}$/.test(pin)){box.innerHTML=`<div class="error">PIN wajib 6 digit angka.</div>`;return;}
+    box.innerHTML=`<div class="notice">Masuk...</div>`;
     try{
-      const rows=await rpc("mvp_customer_login",{
-        p_outlet_slug:OUTLET_SLUG,
-        p_phone:phone,
-        p_pin:pin
-      });
-      if(!rows||!rows.length) throw new Error("Login customer gagal.");
-      const d=rows[0];
-      if(d.login_success === false){
-        box.innerHTML=`<div class="error">${d.error_message || "PIN salah."}</div>`;
-        return;
-      }
-      saveCustomerSession(d);
-      if(claimCode){
-        setHash("claim-gift",{code:claimCode});
-      }else{
-        setHash("customer-portal");
-      }
-    }catch(err){
-      box.innerHTML=`<div class="error">${safeError(err)}</div>`;
-    }
+      const rows=await rpc("mvp_customer_login",{p_outlet_slug:OUTLET_SLUG,p_phone:phone,p_pin:pin});
+      if(!rows||!rows.length)throw new Error("Login gagal.");
+      const data=rows[0];
+      if(data.login_success===false){box.innerHTML=`<div class="error">${esc(data.error_message||'PIN salah.')}</div>`;return;}
+      saveCustomerSession(data);
+      setHash(claimCode?"claim-gift":"customer-portal",claimCode?{code:claimCode}:{});
+    }catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;}
   };
 }
 
 async function renderCustomerPortal(){
-  const session=requireCustomerSession(); if(!session)return;
+  const session=requireCustomerSession();if(!session)return;
   clearSession();
-  byId("app").innerHTML=`<main style="padding:16px;max-width:680px;margin:auto"></main>`;
+  byId("app").innerHTML=`<main class="customer-shell"></main>`;
   const target=document.querySelector("main");
-  target.innerHTML=`<section class="card">${brandMiniHtml()}<h1>Loading Customer Portal...</h1></section>`;
-
+  target.innerHTML=`<div class="empty-state">Memuat...</div>`;
   try{
-    const homeRows=await rpc("mvp_customer_home",{p_session_token:session.session_token});
-    if(!homeRows||!homeRows.length) throw new Error("Session customer tidak valid. Silakan login ulang.");
-    const c=homeRows[0];
-
-    const historyRows=await rpc("mvp_customer_history",{p_session_token:session.session_token});
-    const expiryRows=await rpc("mvp_customer_balance_expiry",{p_session_token:session.session_token});
-    const expiryInfo=expiryRows&&expiryRows[0]?expiryRows[0]:{};
-
+    const [homeRows,historyRows,expiryRows]=await Promise.all([
+      rpc("mvp_customer_home",{p_session_token:session.session_token}),
+      rpc("mvp_customer_history",{p_session_token:session.session_token}),
+      rpc("mvp_customer_balance_expiry",{p_session_token:session.session_token})
+    ]);
+    if(!homeRows||!homeRows.length)throw new Error("Session tidak valid.");
+    const customer=homeRows[0];
+    const expiry=expiryRows&&expiryRows[0]?expiryRows[0]:{};
     target.innerHTML=`
-      <section class="card">
+      <section class="customer-home-card">
         ${brandMiniHtml()}
-        <div class="customer-home-header">
-          <h1>Customer Portal</h1>
-          <p>${esc(c.name || "Member")} • ${esc(c.phone || "")}</p>
+        <div class="customer-greeting"><span>Halo,</span><b>${esc(customer.name||'Member')}</b></div>
+        <div class="balance-hero"><span>Saldo Dining</span><strong>${money(customer.balance||0)}</strong><small>Berlaku sampai ${dateID(expiry.expires_at)}</small></div>
+        <div class="customer-action-grid">
+          <button data-panel="history"><span>◷</span><b>Riwayat</b></button>
+          <button data-panel="gift"><span>◇</span><b>Claim Gift</b></button>
+          <button data-panel="topup"><span>⊕</span><b>Top Up</b></button>
+          <button data-panel="account"><span>?</span><b>Akun</b></button>
         </div>
-        <div class="kpi"><div class="label">Saldo Saat Ini</div><div class="value">${money(c.balance || 0)}</div></div>
-        <div class="item"><div class="title">Member ID</div><div class="meta">${esc(c.member_code || "-")}</div></div>
-        <div class="notice" style="margin-top:12px">Top up hanya bisa dilakukan di kasir CACAYO.</div>
-        <button class="ghost full" style="margin-top:12px" id="customer-logout-btn">Logout</button>
-      </section>
-
-      <section class="card pin-disclaimer-card">
-        <div class="pin-disclaimer-title">Keamanan PIN</div>
-        <p class="pin-disclaimer-text">
-          PIN bersifat rahasia dan menjadi satu-satunya otorisasi untuk penggunaan saldo Dining.
-          Customer wajib menjaga kerahasiaan PIN dan tidak memberikannya kepada pihak lain.
-          Pihak kasir maupun restoran tidak dapat melihat PIN Customer.
-          Setiap transaksi dengan PIN yang benar dianggap sah.
-          Kehilangan saldo akibat kelalaian Customer dalam menjaga PIN
-          bukan tanggung jawab pihak restoran, kecuali disebabkan oleh kesalahan sistem.
-        </p>
-      </section>
-
-      <section class="card">
-        <h2>Claim Gift</h2>
-        <p>Masukkan Gift Code yang dikirim CACAYO melalui WhatsApp.</p>
-        <div class="claim-code-row">
-          <input id="portal-gift-code" class="code-box" placeholder="Masukkan Gift Code"/>
-          <button id="portal-gift-claim-btn">Lanjut</button>
-        </div>
-      </section>
-
-      <section class="card">
-        <h2>Masa Aktif Saldo</h2>
-        <p>Seluruh saldo menggunakan satu tanggal expired. Top up baru akan memperpanjang masa aktif saldo.</p>
-        ${singleBalanceExpiryHtml(expiryInfo)}
-      </section>
-      <section class="card">
-        <h2>Riwayat Transaksi</h2>
-        <p>Detail pembayaran seperti QRIS, tunai, kartu, atau sisa pembayaran tetap dicatat di POS, bukan di CTD.</p>
-        ${historyListHtml(historyRows || [])}
-      </section>
-    `;
-
-    byId("portal-gift-claim-btn").onclick=()=>{
-      const code=byId("portal-gift-code").value.trim().toUpperCase();
-      if(!code){
-        alert("Masukkan Gift Code.");
-        return;
-      }
-      setHash("claim-gift",{code});
+        <div id="customer-panel" class="customer-panel"></div>
+        <button class="text-button" id="customer-logout-btn">Logout</button>
+      </section>`;
+    const panel=byId("customer-panel");
+    const panels={
+      history:`<h2>Riwayat Transaksi</h2>${historyListHtml(historyRows||[])}`,
+      gift:`<h2>Claim Gift</h2><div class="claim-code-row"><input id="portal-gift-code" class="code-box" placeholder="Gift Code"/><button id="portal-gift-claim-btn">Lanjut</button></div>`,
+      topup:`<h2>Top Up</h2><p>Tunjukkan akun ini ke kasir untuk menambah saldo.</p><div class="compact-package-list"><div><b>NICKEL</b><span>Rp1 jt → Rp1,05 jt</span></div><div><b>SILVER</b><span>Rp2 jt → Rp2,2 jt</span></div><div><b>GOLD</b><span>Rp3 jt → Rp3,45 jt</span></div><div><b>DIAMOND</b><span>Rp4 jt → Rp4,8 jt</span></div></div>`,
+      account:`<h2>Keamanan PIN</h2><p class="pin-disclaimer-text">PIN bersifat rahasia dan menjadi satu-satunya otorisasi untuk penggunaan saldo Dining. Customer wajib menjaga kerahasiaan PIN dan tidak memberikannya kepada pihak lain. Pihak kasir maupun restoran tidak dapat melihat PIN Customer. Setiap transaksi dengan PIN yang benar dianggap sah. Kehilangan saldo akibat kelalaian Customer dalam menjaga PIN bukan tanggung jawab pihak restoran, kecuali disebabkan oleh kesalahan sistem.</p>`
     };
-
-    byId("customer-logout-btn").onclick = async()=>{
-      try{
-        await rpc("mvp_customer_logout",{
-          p_session_token:session.session_token
-        });
-      }catch(e){}
-      clearCustomerSession();
-      setHash("customer-login");
-    };
-  }catch(err){
-    clearCustomerSession();
-    target.innerHTML=`<section class="card">${brandMiniHtml()}<h1>Customer Portal</h1><div class="error">${safeError(err)}</div><button class="full" style="margin-top:12px" onclick="setHash('customer-login')">Login Ulang</button></section>`;
-  }
+    function openPanel(name){panel.innerHTML=panels[name]||"";document.querySelectorAll("[data-panel]").forEach(b=>b.classList.toggle("active",b.dataset.panel===name));if(name==="gift"){byId("portal-gift-claim-btn").onclick=()=>{const code=byId("portal-gift-code").value.trim().toUpperCase();if(!code){alert("Masukkan Gift Code.");return;}setHash("claim-gift",{code});};}}
+    document.querySelectorAll("[data-panel]").forEach(button=>button.onclick=()=>openPanel(button.dataset.panel));
+    openPanel("history");
+    byId("customer-logout-btn").onclick=async()=>{try{await rpc("mvp_customer_logout",{p_session_token:session.session_token});}catch(e){}clearCustomerSession();setHash("customer-login");};
+  }catch(err){clearCustomerSession();target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div><button class="full" onclick="setHash('customer-login')">Login Ulang</button></section>`;}
 }
-
 
 async function renderClaimGift(){
   const {params}=getRoute();
@@ -1884,8 +1678,57 @@ async function renderClaimGift(){
 }
 
 
+async function resizePromoImage(file,width=1200,height=800){
+  if(!file)throw new Error("Pilih gambar promo.");
+  if(file.size>10*1024*1024)throw new Error("File asli maksimal 10 MB.");
+  const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Gagal membaca gambar."));reader.readAsDataURL(file);});
+  const image=await new Promise((resolve,reject)=>{const img=new Image();img.onload=()=>resolve(img);img.onerror=()=>reject(new Error("Format gambar tidak didukung."));img.src=dataUrl;});
+  const canvas=document.createElement("canvas");canvas.width=width;canvas.height=height;const ctx=canvas.getContext("2d");
+  const scale=Math.max(width/image.width,height/image.height);const sourceWidth=width/scale;const sourceHeight=height/scale;const sx=(image.width-sourceWidth)/2;const sy=(image.height-sourceHeight)/2;
+  ctx.drawImage(image,sx,sy,sourceWidth,sourceHeight,0,0,width,height);
+  const output=canvas.toDataURL("image/jpeg",0.82);
+  if(output.length>2300000)throw new Error("Gambar masih terlalu besar. Gunakan gambar yang lebih sederhana.");
+  return output;
+}
+
+async function renderPromoManage(){
+  const user=requireLogin();if(!user)return;
+  mountLayout();setNav();
+  screen(`<section class="tablet-page">${staffPageHeader("Kelola Promo",staffHomeRoute(),"Tampil setelah transaksi customer berhasil")}<section class="surface-card promo-admin-card"><div class="promo-preview-frame" id="promo-preview"><div class="empty-state">Belum ada gambar promo.</div></div><form id="promo-form"><label>Gambar Promo</label><input id="promo-file" type="file" accept="image/jpeg,image/png,image/webp"/><small>Gambar otomatis dipotong menjadi 1200 × 800 px. Maksimal file awal 10 MB.</small><label>Judul</label><input id="promo-title" maxlength="100" placeholder="Contoh: Buy 1 Get 1"/><label>Keterangan</label><textarea id="promo-caption" maxlength="240" placeholder="Promo berlaku setiap Senin"></textarea><label class="switch-row"><span>Aktifkan Promo</span><input id="promo-active" type="checkbox"/></label><button class="full touch-button">Simpan Promo</button></form><div id="promo-result"></div></section></section>`);
+  let imageData=null;
+  try{const rows=await rpc("s4_get_promo_admin",{p_staff_session_token:user.session_token});const promo=rows&&rows[0]?rows[0]:{};byId("promo-title").value=promo.title||"";byId("promo-caption").value=promo.caption||"";byId("promo-active").checked=Boolean(promo.is_active);if(promo.image_data_url){imageData=promo.image_data_url;byId("promo-preview").innerHTML=`<img src="${promo.image_data_url}" alt="Preview promo"/>`;}}catch(err){byId("promo-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}
+  byId("promo-file").onchange=async()=>{const file=byId("promo-file").files[0];if(!file)return;byId("promo-result").innerHTML=`<div class="notice">Menyiapkan gambar...</div>`;try{imageData=await resizePromoImage(file);byId("promo-preview").innerHTML=`<img src="${imageData}" alt="Preview promo"/>`;byId("promo-result").innerHTML=`<div class="success">Gambar siap: 1200 × 800 px.</div>`;}catch(err){byId("promo-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}};
+  byId("promo-form").onsubmit=async(event)=>{event.preventDefault();const box=byId("promo-result");box.innerHTML=`<div class="notice">Menyimpan promo...</div>`;try{const rows=await rpc("s4_save_promo",{p_staff_session_token:user.session_token,p_title:byId("promo-title").value.trim(),p_caption:byId("promo-caption").value.trim(),p_image_data_url:imageData,p_is_active:byId("promo-active").checked});const promo=rows&&rows[0]?rows[0]:{};box.innerHTML=`<div class="success">Promo tersimpan. Status: <b>${promo.is_active?'AKTIF':'NONAKTIF'}</b>.</div>`;}catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;}};
+}
+
+async function renderPromo(){
+  const {params}=getRoute();const token=params.token;
+  byId("app").innerHTML=`<main class="customer-shell promo-customer-shell"></main>`;const target=document.querySelector("main");
+  try{
+    const [approvalRows,promoRows]=await Promise.all([rpc("mvp_get_approval",{p_token:token}),rpc("mvp_get_active_promo",{p_outlet_slug:OUTLET_SLUG})]);
+    const approval=approvalRows&&approvalRows[0]?approvalRows[0]:{};const promo=promoRows&&promoRows[0]?promoRows[0]:null;
+    target.innerHTML=`<section class="promo-customer-card">${brandMiniHtml()}<div class="transaction-success-strip"><span>✓</span><div><b>Transaksi Berhasil</b><small>${money(approval.balance_used||0)} • Sisa saldo ${money(approval.balance_after||0)}</small></div></div>${promo&&promo.image_data_url?`<img class="promo-customer-image" src="${promo.image_data_url}" alt="${esc(promo.title||'Promo')}"/><h1>${esc(promo.title||'Promo Spesial')}</h1><p>${esc(promo.caption||'')}</p>`:`<div class="no-promo-state"><div class="success-check">✓</div><h1>Terima Kasih</h1><p>Transaksi Anda telah selesai.</p></div>`}<button class="full touch-button" onclick="setHash('customer-login')">Selesai</button></section>`;
+  }catch(err){target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div><button class="full" onclick="setHash('customer-login')">Selesai</button></section>`;}
+}
+
 async function renderReport(){
-  const u=requireLogin(); if(!u)return; mountLayout(); setNav("report"); screen(`<section class="card"><h1>Loading report...</h1></section>`); try{ const rows=await rpc("s3_recent_transactions",{p_staff_session_token:u.session_token}); screen(`<section class="card"><h1>Transaction Report</h1><div class="list">${rows&&rows.length?rows.map(t=>`<div class="item"><div class="title">${esc(t.type)} • ${money(t.balance_used||t.credit_issued||0)}</div><div class="meta">${esc(t.member_name||"-")} • ${esc(t.member_phone||"-")} • ${new Date(t.created_at).toLocaleString("id-ID")}</div><div class="meta">Status: ${esc(t.status)}</div></div>`).join(""):`<p>Belum ada transaksi.</p>`}</div></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`); }
+  const user=requireLogin();if(!user)return;
+  mountLayout();setNav();
+  const today=new Date();const from=new Date(today.getTime()-6*86400000).toISOString().slice(0,10);const to=today.toISOString().slice(0,10);
+  screen(`<section class="tablet-page">${staffPageHeader("History Transaksi",staffHomeRoute())}<div class="report-filter-bar"><input id="report-from" type="date" value="${from}"/><span>s/d</span><input id="report-to" type="date" value="${to}"/><select id="report-type"><option value="all">Semua Jenis</option><option value="use_balance">Gunakan Saldo</option><option value="topup">Top Up</option><option value="gift_claim">Voucher / Gift</option></select><button id="report-load">Tampilkan</button></div><div id="report-summary" class="report-summary"></div><div id="report-list"></div><div class="report-actions"><button class="touch-button" id="report-pdf">Export PDF</button></div></section>`);
+  let rows=[];
+  function typeLabel(type){return type==="use_balance"?"Gunakan Saldo":type==="topup"?"Top Up":type==="gift_claim"?"Voucher / Gift":type;}
+  function groupRows(){const groups={};rows.forEach(row=>{const key=new Date(row.created_at).toLocaleDateString("sv-SE",{timeZone:"Asia/Jakarta"});(groups[key]||(groups[key]=[])).push(row);});return groups;}
+  function draw(){
+    const totalTopup=rows.reduce((sum,row)=>sum+Number(row.credit_issued||0),0);const totalUsed=rows.reduce((sum,row)=>sum+Number(row.balance_used||0),0);
+    byId("report-summary").innerHTML=`<div><small>Transaksi</small><b>${rows.length}</b></div><div><small>Saldo Masuk</small><b>${money(totalTopup)}</b></div><div><small>Saldo Dipakai</small><b>${money(totalUsed)}</b></div>`;
+    const groups=groupRows();const keys=Object.keys(groups).sort().reverse();
+    byId("report-list").innerHTML=keys.length?keys.map(date=>`<section class="daily-report-group"><header><b>${new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</b><span>${groups[date].length} transaksi</span></header>${groups[date].map(row=>`<div class="report-row"><span class="report-time">${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span><b>${esc(typeLabel(row.type))}</b><small>${esc(row.member_name||'-')} • ${esc(row.member_phone||'-')}</small></span><strong class="${row.type==='use_balance'?'minus':'plus'}">${row.type==='use_balance'?'-':'+'}${money(row.type==='use_balance'?row.balance_used:row.credit_issued)}</strong><span class="status-dot">${esc(row.status||'approved')}</span></div>`).join('')}</section>`).join(''):`<div class="empty-state">Belum ada transaksi pada periode ini.</div>`;
+  }
+  async function load(){byId("report-list").innerHTML=`<div class="empty-state">Loading...</div>`;try{rows=await rpc("s4_staff_transactions_by_date",{p_staff_session_token:user.session_token,p_date_from:byId("report-from").value,p_date_to:byId("report-to").value,p_type:byId("report-type").value})||[];draw();}catch(err){byId("report-list").innerHTML=`<div class="error">${safeError(err)}</div>`;}}
+  byId("report-load").onclick=load;
+  byId("report-pdf").onclick=()=>{const groups=groupRows();const html=`<!doctype html><html><head><title>${OUTLET} Transaction Report</title><style>body{font-family:Arial;padding:28px;color:#17211a}h1{margin:0}.day{margin-top:22px;border-top:2px solid #245c38;padding-top:10px}.row{display:grid;grid-template-columns:80px 1fr 140px;padding:8px 0;border-bottom:1px solid #ddd}.amount{text-align:right;font-weight:bold}</style></head><body><h1>${OUTLET} — History Transaksi</h1><p>${byId('report-from').value} s/d ${byId('report-to').value}</p>${Object.keys(groups).sort().reverse().map(date=>`<div class="day"><h3>${date}</h3>${groups[date].map(row=>`<div class="row"><span>${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span>${esc(typeLabel(row.type))} — ${esc(row.member_name||'-')}</span><span class="amount">${money(row.type==='use_balance'?row.balance_used:row.credit_issued)}</span></div>`).join('')}</div>`).join('')}<script>window.onload=()=>window.print();</script></body></html>`;const w=window.open('','_blank');if(!w){alert('Popup diblokir browser.');return;}w.document.write(html);w.document.close();};
+  await load();
 }
 
 async function renderResetPin(){
@@ -2005,8 +1848,8 @@ async function renderCustomerResetHome(){
 
 function route(){
   const {name}=getRoute();
-  const staffRoutes=new Set(["login","owner","members","gift-generate","report","kasir","member","register","join","topup","use-balance","waiting","success"]);
-  const customerRoutes=new Set(["customer-login","customer-portal","register","join","claim-gift","approve","customer-home","reset-pin","customer-reset-home"]);
+  const staffRoutes=new Set(["login","owner","owner-summary","transaction","promo-manage","members","gift-generate","report","kasir","member","register","join","topup","use-balance","waiting","success"]);
+  const customerRoutes=new Set(["customer-login","customer-portal","register","join","claim-gift","approve","promo","customer-home","reset-pin","customer-reset-home"]);
   if(PORTAL_MODE==="staff" && !staffRoutes.has(name)){ setHash("login"); return; }
   if(PORTAL_MODE==="customer" && !customerRoutes.has(name)){ setHash("customer-login"); return; }
   if(name==="login")return renderLogin();
@@ -2014,12 +1857,16 @@ function route(){
   if(name==="customer-portal")return renderCustomerPortal();
   if(name==="claim-gift")return renderClaimGift();
   if(name==="kasir")return renderKasir();
+  if(name==="transaction")return renderTransaction();
+  if(name==="promo-manage")return renderPromoManage();
+  if(name==="owner-summary")return renderOwnerSummary();
   if(name==="member")return renderMember();
   if(name==="register"||name==="join")return renderJoin();
   if(name==="topup")return renderTopup();
   if(name==="use-balance")return renderUseBalance();
   if(name==="waiting")return renderWaiting();
   if(name==="approve")return renderApprove();
+  if(name==="promo")return renderPromo();
   if(name==="customer-home")return renderCustomerHome();
   if(name==="customer-reset-home")return renderCustomerResetHome();
   if(name==="reset-pin")return renderResetPin();
