@@ -393,3 +393,11 @@ Member Directory:
 - Clarifies PIN as the sole authorization for Dining balance usage.
 - Clarifies customer responsibility, valid PIN transactions, staff visibility limits, and system-error exception.
 - Frontend-only update; no SQL migration required.
+
+
+## v4.0.1 PIN and Member Search Fix
+- PIN keypad numbers are explicitly visible in dark text.
+- Member search supports name, 62-prefix, local 0-prefix, and number without 62.
+- Transaction search accepts 2 or more characters.
+- Name searches no longer create an invalid phone prefill.
+- Run `cacayo-member-system-v401-search-fix.sql` after the v4.0.0 database migration.

@@ -1,5 +1,5 @@
 /* White-label Member Dining System */
-const APP_VERSION = "4.0.0";
+const APP_VERSION = "4.0.1";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -45,7 +45,30 @@ function randomCode(len=8){ let c=""; for(let i=0;i<len;i++) c += SAFE_ALPHABET[
 function memberSeq(){ return "MBR-" + Date.now().toString().slice(-6); }
 function publicBaseUrl(){ return `${location.origin}/?v=${APP_VERSION}`; }
 function qrImageUrl(data, size=260){ if(!window.CTDQR) throw new Error("Local QR engine not loaded"); return window.CTDQR.toDataURL(String(data), size); }
-function normalizePhone(phone){ const raw=String(phone||"").trim().replace(/[^0-9]/g,""); return raw.startsWith("0") ? "62"+raw.slice(1) : raw; }
+function normalizePhone(phone){
+  const raw=String(phone||"").trim().replace(/[^0-9]/g,"");
+  return raw.startsWith("0") ? "62"+raw.slice(1) : raw;
+}
+function localPhoneKey(value){
+  let digits=String(value||"").replace(/[^0-9]/g,"");
+  if(digits.startsWith("62"))digits=digits.slice(2);
+  else if(digits.startsWith("0"))digits=digits.slice(1);
+  return digits;
+}
+function memberMatchesSearch(member,query){
+  const text=String(query||"").trim().toLowerCase();
+  if(!text)return true;
+
+  const name=String(member?.name||"").toLowerCase();
+  const memberCode=String(member?.member_code||"").toLowerCase();
+
+  if(name.includes(text)||memberCode.includes(text))return true;
+
+  const queryPhone=localPhoneKey(text);
+  const memberPhone=localPhoneKey(member?.phone||"");
+
+  return queryPhone.length>=2 && memberPhone.includes(queryPhone);
+}
 function saveSession(u){ sessionStorage.setItem(SESSION_KEY, JSON.stringify(u)); }
 function getSession(){ try{return JSON.parse(sessionStorage.getItem(SESSION_KEY)||"null");}catch(e){return null;} }
 function clearSession(){ sessionStorage.removeItem(SESSION_KEY); }
@@ -192,7 +215,7 @@ async function renderTransaction(){
       <section class="surface-card member-picker-card">
         <label>Cari Member</label>
         <div class="search-box-large"><span>${touchIcon('search')}</span><input id="transaction-member-search" placeholder="Nama atau nomor WhatsApp" autocomplete="off"/></div>
-        <div id="transaction-member-results" class="member-touch-list"><div class="empty-state">Ketik minimal 3 karakter untuk mencari member.</div></div>
+        <div id="transaction-member-results" class="member-touch-list"><div class="empty-state">Ketik minimal 2 karakter nama atau nomor WhatsApp.</div></div>
       </section>
     </section>`);
   let selectedAction="use";
@@ -209,12 +232,24 @@ async function renderTransaction(){
   const results=byId("transaction-member-results");
   async function search(){
     const query=input.value.trim();
-    if(query.length<3){results.innerHTML=`<div class="empty-state">Ketik minimal 3 karakter untuk mencari member.</div>`;return;}
+    if(query.length<2){
+      results.innerHTML=`<div class="empty-state">Ketik minimal 2 karakter nama atau nomor WhatsApp.</div>`;
+      return;
+    }
     results.innerHTML=`<div class="empty-state">Mencari member...</div>`;
     try{
       const rows=await rpc("s3_search_members",{p_staff_session_token:user.session_token,p_query:query});
       if(!rows||!rows.length){
-        results.innerHTML=`<div class="empty-state">Member tidak ditemukan.<button class="ghost full" onclick="setHash('join',{phone:'${esc(normalizePhone(query))}'})">+ Daftar Member Baru</button></div>`;
+        const digits=String(query||"").replace(/[^0-9]/g,"");
+        const phoneButton=digits.length>=8
+          ? `<button class="ghost full" onclick="setHash('join',{phone:'${esc(normalizePhone(digits))}'})">+ Daftar Nomor Ini</button>`
+          : `<button class="ghost full" onclick="setHash('join')">+ Daftar Member Baru</button>`;
+
+        results.innerHTML=`
+          <div class="empty-state">
+            Member tidak ditemukan.
+            ${phoneButton}
+          </div>`;
         return;
       }
       results.innerHTML=rows.map(member=>`
@@ -748,7 +783,12 @@ async function renderApprove(){
         <h1>Gunakan Saldo</h1><div class="confirm-amount">${money(request.balance_used)}</div>
         <p>Masukkan PIN Anda</p>
         <div class="pin-dots" id="pin-dots">${Array.from({length:6},()=>'<i></i>').join('')}</div>
-        <div class="numeric-keypad">${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" data-pin="${n}">${n}</button>`).join('')}<button type="button" class="key-clear">C</button><button type="button" data-pin="0">0</button><button type="button" class="key-back">⌫</button></div>
+        <div class="numeric-keypad" aria-label="Keypad PIN">
+          ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" data-pin="${n}" aria-label="Angka ${n}">${n}</button>`).join('')}
+          <button type="button" class="key-clear" aria-label="Hapus seluruh PIN">C</button>
+          <button type="button" data-pin="0" aria-label="Angka 0">0</button>
+          <button type="button" class="key-back" aria-label="Hapus satu angka">⌫</button>
+        </div>
         <button class="full touch-button" id="approve-pin-button" disabled>Approve</button>
         <button class="text-button" id="rejectBtn">Tolak Transaksi</button>
         <div id="approve-result"></div>
@@ -1323,8 +1363,8 @@ async function renderMembers(){
     </section>`);
   let members=[];
   function visible(){
-    const q=byId("member-query").value.trim().toLowerCase();
-    return members.filter(m=>!q||String(m.name||"").toLowerCase().includes(q)||String(m.phone||"").includes(q));
+    const query=byId("member-query").value;
+    return members.filter(member=>memberMatchesSearch(member,query));
   }
   function draw(){
     const rows=visible();
