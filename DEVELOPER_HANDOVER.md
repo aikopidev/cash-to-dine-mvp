@@ -413,3 +413,12 @@ Member Directory:
 - Item claim/use included in customer, member, and daily history.
 - Wallet, Gift, Voucher, and Item expiry use Jakarta date with 23:59:59 cut-off.
 - Run `cacayo-member-system-v410-gift-item.sql`.
+
+
+## v4.1.1 Reward Control Fix
+- Three large reward choices replace reward-type dropdowns.
+- Gift Item selection uses visual item cards.
+- Voucher, Gift Saldo, and Gift Item controls are separated.
+- Generated codes automatically open their matching control.
+- Lightweight code-list RPC removes repeated Base64 image payload.
+- Run `cacayo-member-system-v411-reward-control-fix.sql` after v4.1.0.
