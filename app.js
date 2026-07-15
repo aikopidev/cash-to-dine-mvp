@@ -1,5 +1,5 @@
 /* White-label Member Dining System */
-const APP_VERSION = "4.1.1";
+const APP_VERSION = "4.2.0";
 const PORTAL_MODE = window.CTD_PORTAL_MODE === "staff" ? "staff" : "customer";
 const OUTLET = "CACAYO";
 const OUTLET_FULL = "CACAYO CHINESE CALIFORNIAN FUSION FOOD";
@@ -180,7 +180,7 @@ function staffHomeHtml(user){
       <div class="touch-menu three">
         <button class="touch-menu-card primary" onclick="setHash('transaction')">
           <span class="touch-menu-icon">${touchIcon('transaction')}</span>
-          <b>Transaksi</b><small>Saldo / Top Up / Gift Item</small>
+          <b>Transaksi</b><small>Saldo dan Gift Item dalam satu approval</small>
         </button>
         <button class="touch-menu-card" onclick="setHash('report')">
           <span class="touch-menu-icon">${touchIcon('history')}</span>
@@ -236,75 +236,175 @@ async function renderKasir(){
 }
 
 async function renderTransaction(){
-  const user=requireLogin();if(!user)return;
-  mountLayout();setNav();
+  const user=requireLogin();
+  if(!user)return;
+
+  mountLayout();
+  setNav();
+
   screen(`
     <section class="tablet-page">
-      ${staffPageHeader("Transaksi",staffHomeRoute(),"Pilih jenis transaksi lalu cari member")}
-      <div class="transaction-choice three">
-        <button class="transaction-choice-card active" data-action="use">
-          <span>${touchIcon('use')}</span><b>Gunakan Saldo</b>
+      ${staffPageHeader(
+        "Transaksi",
+        staffHomeRoute(),
+        "Cari member, lalu pilih Saldo, Gift Item, atau keduanya"
+      )}
+
+      <div class="transaction-choice two unified-entry-choice">
+        <button class="transaction-choice-card active"
+          data-action="benefit">
+          <span>${touchIcon("use")}</span>
+          <b>Gunakan Benefit</b>
+          <small>Saldo / Gift Item / Keduanya</small>
         </button>
-        <button class="transaction-choice-card" data-action="topup">
-          <span>${touchIcon('topup')}</span><b>Top Up</b>
-        </button>
-        <button class="transaction-choice-card" data-action="item">
-          <span>${touchIcon('item')}</span><b>Gunakan Gift Item</b>
+
+        <button class="transaction-choice-card"
+          data-action="topup">
+          <span>${touchIcon("topup")}</span>
+          <b>Top Up</b>
+          <small>Tambah saldo member</small>
         </button>
       </div>
+
       <section class="surface-card member-picker-card">
         <label>Cari Member</label>
-        <div class="search-box-large"><span>${touchIcon('search')}</span><input id="transaction-member-search" placeholder="Nama atau nomor WhatsApp" autocomplete="off"/></div>
-        <div id="transaction-member-results" class="member-touch-list"><div class="empty-state">Ketik minimal 2 karakter nama atau nomor WhatsApp.</div></div>
+        <div class="search-box-large">
+          <span>${touchIcon("search")}</span>
+          <input id="transaction-member-search"
+            placeholder="Nama atau nomor WhatsApp"
+            autocomplete="off"/>
+        </div>
+
+        <div id="transaction-member-results"
+          class="member-touch-list">
+          <div class="empty-state">
+            Ketik minimal 2 karakter nama atau nomor WhatsApp.
+          </div>
+        </div>
       </section>
-    </section>`);
-  let selectedAction="use";
+    </section>
+  `);
+
+  let selectedAction="benefit";
   let timer=null;
-  document.querySelectorAll(".transaction-choice-card").forEach(button=>{
-    button.onclick=()=>{
-      document.querySelectorAll(".transaction-choice-card").forEach(item=>item.classList.remove("active"));
-      button.classList.add("active");
-      selectedAction=button.dataset.action||"use";
-      byId("transaction-member-search").focus();
-      if(byId("transaction-member-search").value.trim().length>=2)search();
-    };
-  });
+
+  document.querySelectorAll(".transaction-choice-card")
+    .forEach(button=>{
+      button.onclick=()=>{
+        document.querySelectorAll(".transaction-choice-card")
+          .forEach(item=>item.classList.remove("active"));
+
+        button.classList.add("active");
+        selectedAction=button.dataset.action||"benefit";
+
+        byId("transaction-member-search").focus();
+
+        if(
+          byId("transaction-member-search")
+            .value
+            .trim()
+            .length>=2
+        ){
+          search();
+        }
+      };
+    });
+
   const input=byId("transaction-member-search");
   const results=byId("transaction-member-results");
+
   async function search(){
     const query=input.value.trim();
+
     if(query.length<2){
-      results.innerHTML=`<div class="empty-state">Ketik minimal 2 karakter nama atau nomor WhatsApp.</div>`;
+      results.innerHTML=`
+        <div class="empty-state">
+          Ketik minimal 2 karakter nama atau nomor WhatsApp.
+        </div>`;
       return;
     }
-    results.innerHTML=`<div class="empty-state">Mencari member...</div>`;
+
+    results.innerHTML=`
+      <div class="empty-state">Mencari member...</div>`;
+
     try{
-      const rows=await rpc("s3_search_members",{p_staff_session_token:user.session_token,p_query:query});
+      const rows=await rpc("s3_search_members",{
+        p_staff_session_token:user.session_token,
+        p_query:query
+      });
+
       if(!rows||!rows.length){
-        const digits=String(query||"").replace(/[^0-9]/g,"");
-        const phoneButton=digits.length>=8
-          ? `<button class="ghost full" onclick="setHash('join',{phone:'${esc(normalizePhone(digits))}'})">+ Daftar Nomor Ini</button>`
-          : `<button class="ghost full" onclick="setHash('join')">+ Daftar Member Baru</button>`;
+        const digits=String(query||"")
+          .replace(/[^0-9]/g,"");
+
+        const registerButton=digits.length>=8
+          ? `<button class="ghost full"
+              onclick="setHash(
+                'join',
+                {phone:'${esc(normalizePhone(digits))}'}
+              )">
+              + Daftar Nomor Ini
+            </button>`
+          : `<button class="ghost full"
+              onclick="setHash('join')">
+              + Daftar Member Baru
+            </button>`;
 
         results.innerHTML=`
           <div class="empty-state">
             Member tidak ditemukan.
-            ${phoneButton}
+            ${registerButton}
           </div>`;
         return;
       }
+
       results.innerHTML=rows.map(member=>`
-        <button class="member-touch-row" type="button" onclick="setHash('${selectedAction==='topup'?'topup':selectedAction==='item'?'member':'use-balance'}',{phone:'${esc(member.phone)}',action:'${selectedAction}'})">
-          <span class="member-avatar">${esc(String(member.name||'?').charAt(0).toUpperCase())}</span>
-          <span class="member-touch-main"><b>${esc(member.name)}</b><small>${esc(member.phone)} • ${String(member.status||'active').toUpperCase()}</small></span>
-          <span class="member-touch-balance"><small>Saldo</small><b>${money(member.balance)}</b></span><span class="chevron">›</span>
-        </button>`).join("");
-    }catch(err){results.innerHTML=`<div class="error">${safeError(err)}</div>`;}
+        <button class="member-touch-row"
+          type="button"
+          onclick="setHash(
+            '${selectedAction==="topup"?"topup":"use-benefits"}',
+            {phone:'${esc(member.phone)}'}
+          )">
+
+          <span class="member-avatar">
+            ${esc(
+              String(member.name||"?")
+                .charAt(0)
+                .toUpperCase()
+            )}
+          </span>
+
+          <span class="member-touch-main">
+            <b>${esc(member.name)}</b>
+            <small>
+              ${esc(member.phone)} •
+              ${String(
+                member.status||"active"
+              ).toUpperCase()}
+            </small>
+          </span>
+
+          <span class="member-touch-balance">
+            <small>Saldo</small>
+            <b>${money(member.balance)}</b>
+          </span>
+
+          <span class="chevron">›</span>
+        </button>
+      `).join("");
+    }catch(err){
+      results.innerHTML=`
+        <div class="error">${safeError(err)}</div>`;
+    }
   }
-  input.oninput=()=>{clearTimeout(timer);timer=setTimeout(search,300);};
+
+  input.oninput=()=>{
+    clearTimeout(timer);
+    timer=setTimeout(search,300);
+  };
+
   input.focus();
 }
-
 async function fetchMemberByPhone(phone){ const u=currentUser(); const rows=await rpc("s3_search_member",{p_staff_session_token:u.session_token, p_phone:normalizePhone(phone)}); return rows&&rows.length?rows[0]:null; }
 
 function historyListHtml(rows, emptyText="Belum ada transaksi."){
@@ -480,10 +580,14 @@ async function renderMember(){
         <div class="divider"></div>
         <div class="kpi"><div class="label">Saldo Dining</div><div class="value">${money(m.balance)}</div></div>
         ${isBlocked ? `<div class="error" style="margin-top:12px">${customerBlockedMessage()}</div>` : `
-        <div class="grid three member-action-grid" style="margin-top:12px">
-          <button onclick="setHash('topup',{phone:'${esc(m.phone)}'})">Top Up Saldo</button>
-          <button class="secondary" onclick="setHash('use-balance',{phone:'${esc(m.phone)}'})">Gunakan Saldo</button>
-          <button class="ghost" onclick="document.getElementById('member-gift-items-card')?.scrollIntoView({behavior:'smooth'})">Gift Item</button>
+        <div class="grid two member-action-grid" style="margin-top:12px">
+          <button onclick="setHash('topup',{phone:'${esc(m.phone)}'})">
+            Top Up Saldo
+          </button>
+          <button class="secondary"
+            onclick="setHash('use-benefits',{phone:'${esc(m.phone)}'})">
+            Gunakan Benefit
+          </button>
         </div>`}
       </section>
       <section class="card">
@@ -499,7 +603,7 @@ async function renderMember(){
 
       <section class="card" id="member-gift-items-card">
         <h2>Gift Item Member</h2>
-        <p>Pilih item yang akan digunakan. Customer harus scan QR dan approve menggunakan PIN.</p>
+        <p>Daftar item yang dimiliki member. Penggunaan dilakukan melalui tombol <b>Gunakan Benefit</b> di atas.</p>
         ${giftItemError
           ? `<div class="error">${esc(giftItemError)}</div>`
           : giftItemRows.length
@@ -515,13 +619,10 @@ async function renderMember(){
                     ${item.item_description?`<p>${esc(item.item_description)}</p>`:""}
                     <small>ED ${dateID(item.expires_at)} • ${esc(giftItemCountdown(item.days_remaining))}</small>
                     <span class="badge ${item.status==="available"?"ok":""}">${esc(giftItemStatusLabel(item.status))}</span>
-                    ${item.status==="available"&&!isBlocked
-                      ? `<button class="full touch-button" onclick="window.startGiftItemRedemption('${item.member_gift_item_id}')">Gunakan Item</button>`
-                      : ""}
+
                   </div>
                 </article>`).join("")}</div>`
             : `<div class="empty-state">Member belum memiliki Gift Item.</div>`}
-        <div id="gift-item-redemption-result" style="margin-top:12px"></div>
       </section>
 
       <section class="card">
@@ -533,28 +634,6 @@ async function renderMember(){
       ${ownerDelete}
     `);
 
-    window.startGiftItemRedemption=async(memberGiftItemId)=>{
-      const box=byId("gift-item-redemption-result");
-      box.innerHTML=`<div class="notice">Membuat approval Gift Item...</div>`;
-      try{
-        const rows=await rpc("s4_create_item_redemption",{
-          p_staff_session_token:u.session_token,
-          p_member_gift_item_id:memberGiftItemId
-        });
-        const result=rows&&rows[0]?rows[0]:{};
-        const link=`${publicBaseUrl()}#approve-item?token=${result.token}`;
-        box.innerHTML=`
-          <div class="success"><b>Approval Gift Item Siap ✅</b><br>${esc(result.item_name||"Gift Item")}<br>Customer scan QR dan masukkan PIN.</div>
-          <div class="qr-wrap">
-            <img class="qr-img" src="${qrImageUrl(link)}" alt="QR Gift Item"/>
-            <div class="meta">Link berlaku 15 menit.</div>
-          </div>
-          <textarea class="copy-area" readonly>${link}</textarea>
-          <button class="secondary full" onclick="navigator.clipboard.writeText('${link}').then(()=>alert('Link copied'))">Copy Approval Link</button>`;
-      }catch(err){
-        box.innerHTML=`<div class="error">${safeError(err)}</div>`;
-      }
-    };
 
     byId("reset-pin-btn").onclick = async ()=>{
       const box = byId("staff-action-result");
@@ -581,10 +660,6 @@ async function renderMember(){
         box.innerHTML = `<div class="error">${safeError(err)}</div>`;
       }
     };
-
-    if(params.action==="item"){
-      setTimeout(()=>document.getElementById("member-gift-items-card")?.scrollIntoView({behavior:"smooth",block:"start"}),120);
-    }
 
     if(u.role === "owner"){
       byId("delete-member-btn").onclick = async ()=>{
@@ -817,26 +892,720 @@ async function renderTopup(){
     screen(`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`);
   }
 }
-async function renderUseBalance(){
-  const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); screen(`<section class="card"><h1>Loading saldo...</h1></section>`);
-  try{ const m=await fetchMemberByPhone(params.phone); if(!m){setHash("kasir");return;} const bal=Number(m.balance||0); const dis=bal<=0?"disabled":""; screen(`<section class="card"><h1>Gunakan Saldo</h1><p>${esc(m.name)} • Saldo ${money(bal)}</p>${bal<=0?`<div class="error"><b>Saldo customer Rp0.</b><br>Request pemakaian saldo tidak bisa dibuat sampai customer top up / mendapat saldo baru.</div>`:`<div class="notice">Kasir cukup input nominal saldo/voucher yang akan dipakai. Bill dan payment split tetap divalidasi manual di POS.</div>`}<form id="use-form"><label>Nominal Saldo / Voucher yang Dipakai</label><input id="balanceUsed" inputmode="numeric" placeholder="100000" ${dis} required/><div id="calc" class="notice" style="margin-top:12px">Nominal akan dikirim ke customer untuk approval.</div><button id="requestBtn" class="full" style="margin-top:14px" ${dis}>Request Customer Approval</button></form><div id="use-result" style="margin-top:12px"></div></section>`);
-    const update=()=>{ const used=parseMoney(byId("balanceUsed").value); const btn=byId("requestBtn"), box=byId("calc"); if(used<=0){box.className="notice";box.innerHTML="Masukkan nominal saldo yang akan dipakai.";btn.disabled=true;return;} if(used>bal){box.className="error";box.innerHTML=`<b>Saldo tidak cukup.</b><br>Saldo customer: ${money(bal)}. Request: ${money(used)}. Saldo tidak boleh minus.`;btn.disabled=true;return;} box.className="success"; box.innerHTML = used===bal ? `Request valid. Customer akan approve ${money(used)}. Saldo setelah approval menjadi <b>Rp0</b>.` : `Request valid. Customer akan approve ${money(used)}. Saldo setelah approval: <b>${money(bal-used)}</b>.`; btn.disabled=false; };
-    if(bal>0){ byId("balanceUsed").oninput=update; update(); }
-    byId("use-form").onsubmit=async(e)=>{ e.preventDefault(); const used=parseMoney(byId("balanceUsed").value); const box=byId("use-result"); if(used<=0||used>bal){ box.innerHTML=`<div class="error">Saldo tidak cukup / nominal tidak valid. Saldo tidak boleh minus.</div>`; return; } box.innerHTML=`<div class="notice">Creating approval request...</div>`; try{       const rows=await rpc("s3_create_approval_request",{p_staff_session_token:u.session_token,p_member_id:m.member_id,p_balance_used:used});
-      const d=rows&&rows[0]?rows[0]:{};
-      if(!d.token) throw new Error("Approval token gagal dibuat.");
-      setHash("waiting",{token:d.token}); }catch(err){ box.innerHTML=`<div class="error">${safeError(err)}</div>`; } };
-  }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`); }
+function normalizeJsonArray(value){
+  if(Array.isArray(value))return value;
+  if(typeof value==="string"){
+    try{
+      const parsed=JSON.parse(value);
+      return Array.isArray(parsed)?parsed:[];
+    }catch(err){
+      return [];
+    }
+  }
+  return [];
 }
 
-async function renderWaiting(){
-  const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); const token=params.token; const link=`${publicBaseUrl()}#approve?token=${token}`; screen(`<section class="card"><h1>Loading approval...</h1></section>`);
-  const draw=(p)=>screen(`<section class="card"><h1>Menunggu Approval Customer</h1><p>Customer scan QR ini di HP sendiri dan input PIN/password membership.</p><div class="item"><div class="title">Member</div><div class="meta">${esc(p.member_name)} • ${esc(p.member_phone)}</div></div><div class="item"><div class="title">Nominal Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div><div class="item"><div class="title">Saldo Setelah Approval</div><div class="meta">${money(p.balance_after)}</div></div><div class="qr-wrap"><img class="qr-img" src="${qrImageUrl(link)}" alt="QR Approval"/><div class="meta">Customer scan QR ini dari HP masing-masing.</div></div><label>Approval Link</label><textarea class="copy-area" readonly>${link}</textarea><button class="secondary full" onclick="navigator.clipboard.writeText('${link}').then(()=>alert('Link copied'))">Copy Approval Link</button><button class="ghost full" style="margin-top:8px" onclick="setHash('approve',{token:'${token}'})">Simulasi Customer Approve di Browser Ini</button><div id="waiting-status" class="notice" style="margin-top:12px">Status: ${p.status}</div></section>`);
-  try{ const rows=await rpc("mvp_get_approval",{p_token:token}); if(!rows||!rows.length) throw new Error("Approval tidak ditemukan."); draw(rows[0]); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`); return; }
-  const interval=setInterval(async()=>{ const box=byId("waiting-status"); if(!box){clearInterval(interval);return;} try{ const rows=await rpc("mvp_get_approval",{p_token:token}); const p=rows&&rows[0]; if(!p)return; if(p.status==="approved"){ box.className="success"; box.innerHTML="Status: Approved ✅"; setTimeout(()=>setHash("success",{token}),700); clearInterval(interval); } else if(p.status==="rejected"){ box.className="error"; box.innerHTML="Status: Rejected ❌"; clearInterval(interval); } else { box.className="notice"; box.innerHTML=`Status: ${p.status}`; } }catch(e){ console.warn(e); } },2500);
+function groupAvailableGiftItems(rows){
+  const groups=new Map();
+
+  (rows||[])
+    .filter(item=>item.status==="available")
+    .forEach(item=>{
+      const key=item.gift_item_id||
+        `${item.item_name}|${item.item_description||""}`;
+
+      if(!groups.has(key)){
+        groups.set(key,{
+          gift_item_id:item.gift_item_id||null,
+          item_name:item.item_name||"Gift Item",
+          item_description:item.item_description||"",
+          image_data_url:item.image_data_url||null,
+          items:[]
+        });
+      }
+
+      groups.get(key).items.push(item);
+    });
+
+  return Array.from(groups.values()).map(group=>{
+    group.items.sort((a,b)=>
+      new Date(a.expires_at).getTime()-
+      new Date(b.expires_at).getTime()
+    );
+    return group;
+  });
 }
 
+function unifiedItemSummaryHtml(items){
+  const rows=items||[];
 
+  if(!rows.length){
+    return `<div class="unified-empty-items">Tidak ada Gift Item dipilih.</div>`;
+  }
+
+  return `<div class="unified-summary-items">${rows.map(item=>`
+    <div class="unified-summary-item">
+      <span>${esc(item.item_name||"Gift Item")}</span>
+      <b>${Number(item.quantity||0)}×</b>
+    </div>
+  `).join("")}</div>`;
+}
+
+async function renderUseBenefits(){
+  const user=requireLogin();
+  if(!user)return;
+
+  mountLayout();
+  setNav("kasir");
+
+  const {params}=getRoute();
+
+  screen(`
+    <section class="tablet-page">
+      ${staffPageHeader(
+        "Gunakan Benefit",
+        "transaction",
+        "Saldo, Gift Item, atau keduanya dalam satu transaksi"
+      )}
+      <div class="surface-card">
+        <div class="empty-state">Memuat benefit member...</div>
+      </div>
+    </section>
+  `);
+
+  try{
+    const member=await fetchMemberByPhone(params.phone);
+
+    if(!member){
+      setHash("transaction");
+      return;
+    }
+
+    const [expiryRows,itemRows]=await Promise.all([
+      rpc("s3_staff_member_balance_expiry",{
+        p_staff_session_token:user.session_token,
+        p_member_id:member.member_id
+      }),
+      rpc("s42_staff_member_benefits",{
+        p_staff_session_token:user.session_token,
+        p_member_id:member.member_id
+      })
+    ]);
+
+    const expiryInfo=expiryRows&&expiryRows[0]
+      ? expiryRows[0]
+      : {};
+
+    const availableBalance=Number(
+      expiryInfo.balance??member.balance??0
+    );
+
+    const itemGroups=groupAvailableGiftItems(itemRows||[]);
+    const selectedQuantities=new Map();
+
+    screen(`
+      <section class="tablet-page unified-transaction-page">
+        ${staffPageHeader(
+          "Gunakan Benefit",
+          "transaction",
+          "Satu QR dan satu PIN untuk seluruh pilihan"
+        )}
+
+        <section class="surface-card unified-member-header">
+          <div class="member-avatar large">
+            ${esc(
+              String(member.name||"?")
+                .charAt(0)
+                .toUpperCase()
+            )}
+          </div>
+
+          <div>
+            <h2>${esc(member.name)}</h2>
+            <p>
+              ${esc(member.phone)} •
+              ${esc(member.member_code||"")}
+            </p>
+          </div>
+
+          <div class="unified-member-balance">
+            <small>Saldo Aktif</small>
+            <b>${money(availableBalance)}</b>
+            <span>
+              ${expiryInfo.expires_at
+                ? `ED ${dateID(expiryInfo.expires_at)} • 23:59`
+                : "Tidak ada saldo aktif"}
+            </span>
+          </div>
+        </section>
+
+        <form id="unified-transaction-form">
+          <section class="surface-card benefit-choice-card">
+            <div class="benefit-section-heading">
+              <div>
+                <h2>1. Gunakan Saldo</h2>
+                <p>Aktifkan bila saldo Dining akan digunakan.</p>
+              </div>
+
+              <label class="benefit-toggle">
+                <input id="use-balance-toggle"
+                  type="checkbox"
+                  ${availableBalance<=0?"disabled":""}/>
+                <span></span>
+              </label>
+            </div>
+
+            <div id="balance-use-fields"
+              class="balance-use-fields"
+              hidden>
+              <label>Nominal Saldo yang Digunakan</label>
+
+              <div class="money-input-large">
+                <span>Rp</span>
+                <input id="unified-balance-used"
+                  inputmode="numeric"
+                  placeholder="100000"/>
+              </div>
+
+              <div id="unified-balance-calculation"
+                class="notice">
+                Masukkan nominal saldo.
+              </div>
+            </div>
+
+            ${availableBalance<=0
+              ? `<div class="empty-state compact">
+                  Saldo member Rp0.
+                </div>`
+              : ""}
+          </section>
+
+          <section class="surface-card benefit-choice-card">
+            <div class="benefit-section-heading">
+              <div>
+                <h2>2. Gunakan Gift Item</h2>
+                <p>Pilih satu atau beberapa item.</p>
+              </div>
+
+              <span class="badge">
+                ${itemGroups.reduce(
+                  (sum,group)=>sum+group.items.length,
+                  0
+                )} tersedia
+              </span>
+            </div>
+
+            <div id="unified-item-picker"
+              class="unified-item-picker">
+              ${itemGroups.length
+                ? itemGroups.map((group,index)=>`
+                    <article class="unified-item-card"
+                      data-item-group-index="${index}">
+                      <div class="unified-item-image">
+                        ${group.image_data_url
+                          ? `<img src="${group.image_data_url}"
+                              alt="${esc(group.item_name)}"/>`
+                          : `<div class="gift-item-image-placeholder">
+                              ${touchIcon("item")}
+                            </div>`}
+                      </div>
+
+                      <div class="unified-item-info">
+                        <h3>${esc(group.item_name)}</h3>
+                        ${group.item_description
+                          ? `<p>${esc(group.item_description)}</p>`
+                          : ""}
+
+                        <small>
+                          ${group.items.length} tersedia •
+                          ED terdekat
+                          ${dateID(group.items[0].expires_at)}
+                        </small>
+
+                        <div class="quantity-stepper">
+                          <button type="button"
+                            data-item-minus="${index}">
+                            −
+                          </button>
+
+                          <strong id="item-qty-${index}">0</strong>
+
+                          <button type="button"
+                            data-item-plus="${index}">
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  `).join("")
+                : `<div class="empty-state">
+                    Member belum memiliki Gift Item aktif.
+                  </div>`}
+            </div>
+          </section>
+
+          <section class="surface-card">
+            <h2>3. Referensi POS</h2>
+            <p>Nomor Bill/Invoice wajib diisi untuk mencocokkan transaksi dengan POS restoran.</p>
+
+            <label>Nomor Bill / Invoice POS</label>
+            <input id="unified-invoice"
+              maxlength="80"
+              placeholder="Contoh: INV-150726-001"
+              required/>
+          </section>
+
+          <section class="surface-card unified-checkout-card">
+            <h2>Ringkasan Transaksi</h2>
+
+            <div class="unified-summary-row">
+              <span>Saldo digunakan</span>
+              <b id="summary-balance-used">${money(0)}</b>
+            </div>
+
+            <div id="summary-items">
+              ${unifiedItemSummaryHtml([])}
+            </div>
+
+            <div class="unified-summary-row total">
+              <span>Benefit dipilih</span>
+              <b id="summary-benefit-count">0</b>
+            </div>
+
+            <div id="unified-validation-message"
+              class="notice">
+              Pilih saldo, Gift Item, atau keduanya.
+            </div>
+
+            <button class="full touch-button"
+              id="create-unified-request"
+              disabled>
+              Buat QR Konfirmasi
+            </button>
+
+            <div id="unified-request-result"></div>
+          </section>
+        </form>
+      </section>
+    `);
+
+    const balanceToggle=byId("use-balance-toggle");
+    const balanceFields=byId("balance-use-fields");
+    const balanceInput=byId("unified-balance-used");
+    const invoiceInput=byId("unified-invoice");
+    const createButton=byId("create-unified-request");
+    const validationBox=byId("unified-validation-message");
+
+    function selectedItemIds(){
+      const ids=[];
+
+      itemGroups.forEach((group,index)=>{
+        const qty=Number(
+          selectedQuantities.get(index)||0
+        );
+
+        group.items
+          .slice(0,qty)
+          .forEach(item=>{
+            ids.push(item.member_gift_item_id);
+          });
+      });
+
+      return ids;
+    }
+
+    function selectedItemSummary(){
+      return itemGroups.map((group,index)=>({
+        item_name:group.item_name,
+        quantity:Number(
+          selectedQuantities.get(index)||0
+        )
+      })).filter(item=>item.quantity>0);
+    }
+
+    function updateSummary(){
+      const useBalance=Boolean(
+        balanceToggle&&balanceToggle.checked
+      );
+
+      const balanceUsed=useBalance
+        ? parseMoney(balanceInput.value)
+        : 0;
+
+      const itemIds=selectedItemIds();
+      const itemSummary=selectedItemSummary();
+      const invoice=invoiceInput.value.trim();
+
+      byId("summary-balance-used").textContent=
+        money(balanceUsed);
+
+      byId("summary-items").innerHTML=
+        unifiedItemSummaryHtml(itemSummary);
+
+      byId("summary-benefit-count").textContent=
+        `${(balanceUsed>0?1:0)+itemIds.length} benefit`;
+
+      let error="";
+
+      if(useBalance&&balanceUsed<=0){
+        error="Masukkan nominal saldo yang digunakan.";
+      }else if(balanceUsed>availableBalance){
+        error="Saldo yang digunakan melebihi saldo member.";
+      }else if(balanceUsed<=0&&!itemIds.length){
+        error="Pilih saldo, Gift Item, atau keduanya.";
+      }else if(!invoice){
+        error="Nomor Bill/Invoice POS wajib diisi.";
+      }
+
+      if(useBalance){
+        const calculation=byId(
+          "unified-balance-calculation"
+        );
+
+        if(balanceUsed<=0){
+          calculation.className="notice";
+          calculation.textContent=
+            "Masukkan nominal saldo.";
+        }else if(balanceUsed>availableBalance){
+          calculation.className="error";
+          calculation.textContent=
+            `Saldo tidak cukup. Saldo aktif ${money(
+              availableBalance
+            )}.`;
+        }else{
+          calculation.className="success";
+          calculation.innerHTML=
+            `Saldo setelah transaksi:
+             <b>${money(
+               availableBalance-balanceUsed
+             )}</b>.`;
+        }
+      }
+
+      validationBox.className=error
+        ? "notice"
+        : "success";
+
+      validationBox.textContent=error||
+        "Transaksi siap dibuat. Customer akan approve satu kali.";
+
+      createButton.disabled=Boolean(error);
+    }
+
+    if(balanceToggle){
+      balanceToggle.onchange=()=>{
+        balanceFields.hidden=!balanceToggle.checked;
+
+        if(!balanceToggle.checked){
+          balanceInput.value="";
+        }
+
+        updateSummary();
+      };
+    }
+
+    balanceInput.oninput=updateSummary;
+    invoiceInput.oninput=updateSummary;
+
+    document.querySelectorAll("[data-item-minus]")
+      .forEach(button=>{
+        button.onclick=()=>{
+          const index=Number(button.dataset.itemMinus);
+          const current=Number(
+            selectedQuantities.get(index)||0
+          );
+
+          selectedQuantities.set(
+            index,
+            Math.max(0,current-1)
+          );
+
+          byId(`item-qty-${index}`).textContent=
+            selectedQuantities.get(index);
+
+          updateSummary();
+        };
+      });
+
+    document.querySelectorAll("[data-item-plus]")
+      .forEach(button=>{
+        button.onclick=()=>{
+          const index=Number(button.dataset.itemPlus);
+          const max=itemGroups[index].items.length;
+          const current=Number(
+            selectedQuantities.get(index)||0
+          );
+
+          selectedQuantities.set(
+            index,
+            Math.min(max,current+1)
+          );
+
+          byId(`item-qty-${index}`).textContent=
+            selectedQuantities.get(index);
+
+          updateSummary();
+        };
+      });
+
+    byId("unified-transaction-form").onsubmit=
+      async event=>{
+        event.preventDefault();
+
+        updateSummary();
+
+        if(createButton.disabled)return;
+
+        const box=byId("unified-request-result");
+        const balanceUsed=balanceToggle.checked
+          ? parseMoney(balanceInput.value)
+          : 0;
+
+        const itemIds=selectedItemIds();
+
+        box.innerHTML=`
+          <div class="notice">
+            Membuat satu approval transaksi...
+          </div>`;
+
+        createButton.disabled=true;
+
+        try{
+          const rows=await rpc(
+            "s42_create_unified_transaction",
+            {
+              p_staff_session_token:user.session_token,
+              p_member_id:member.member_id,
+              p_invoice_number:invoiceInput.value.trim(),
+              p_balance_used:balanceUsed,
+              p_member_gift_item_ids:itemIds
+            }
+          );
+
+          const result=rows&&rows[0]?rows[0]:{};
+
+          if(!result.token){
+            throw new Error(
+              "Token transaksi gagal dibuat."
+            );
+          }
+
+          setHash("unified-waiting",{
+            token:result.token
+          });
+        }catch(err){
+          box.innerHTML=`
+            <div class="error">${safeError(err)}</div>`;
+          updateSummary();
+        }
+      };
+
+    updateSummary();
+  }catch(err){
+    screen(`
+      <section class="card">
+        <h1>Error</h1>
+        <div class="error">${safeError(err)}</div>
+      </section>
+    `);
+  }
+}
+
+async function renderUnifiedWaiting(){
+  const user=requireLogin();
+  if(!user)return;
+
+  mountLayout();
+  setNav("kasir");
+
+  const {params}=getRoute();
+  const token=params.token;
+  const link=
+    `${publicBaseUrl()}#approve-transaction?token=${token}`;
+
+  screen(`
+    <section class="tablet-page">
+      ${staffPageHeader(
+        "Menunggu Konfirmasi",
+        "transaction"
+      )}
+      <section class="surface-card">
+        <div class="empty-state">
+          Memuat transaksi...
+        </div>
+      </section>
+    </section>
+  `);
+
+  function draw(request){
+    const items=normalizeJsonArray(request.items);
+
+    screen(`
+      <section class="tablet-page unified-waiting-page">
+        ${staffPageHeader(
+          "Menunggu Konfirmasi",
+          "transaction",
+          request.reference_code||""
+        )}
+
+        <section class="surface-card">
+          <div class="unified-waiting-header">
+            <div>
+              <h2>${esc(request.member_name||"-")}</h2>
+              <p>${esc(request.member_phone||"-")}</p>
+            </div>
+
+            <span class="status-pill ${
+              request.status==="waiting"
+                ?"available"
+                : request.status
+            }">
+              ${esc(
+                String(request.status||"").toUpperCase()
+              )}
+            </span>
+          </div>
+
+          <div class="unified-detail-grid">
+            <div>
+              <span>Bill / Invoice</span>
+              <b>${esc(request.invoice_number||"-")}</b>
+            </div>
+            <div>
+              <span>Referensi</span>
+              <b>${esc(request.reference_code||"-")}</b>
+            </div>
+            <div>
+              <span>Saldo Dipakai</span>
+              <b>${money(request.balance_used||0)}</b>
+            </div>
+            <div>
+              <span>Saldo Setelah</span>
+              <b>${money(request.balance_after||0)}</b>
+            </div>
+          </div>
+
+          <h3>Gift Item</h3>
+          ${unifiedItemSummaryHtml(items)}
+
+          <div class="qr-wrap">
+            <img class="qr-img"
+              src="${qrImageUrl(link)}"
+              alt="QR Konfirmasi Transaksi"/>
+
+            <div class="meta">
+              Customer scan QR dan masukkan PIN satu kali.
+            </div>
+          </div>
+
+          <label>Link Konfirmasi</label>
+          <textarea class="copy-area"
+            readonly>${link}</textarea>
+
+          <button class="secondary full"
+            id="copy-unified-link">
+            Copy Link
+          </button>
+
+          <button class="ghost full"
+            style="margin-top:8px"
+            onclick="setHash(
+              'approve-transaction',
+              {token:'${token}'}
+            )">
+            Simulasi Customer di Browser Ini
+          </button>
+
+          <div id="unified-waiting-status"
+            class="notice"
+            style="margin-top:12px">
+            Status: ${esc(request.status||"waiting")}
+          </div>
+        </section>
+      </section>
+    `);
+
+    byId("copy-unified-link").onclick=async()=>{
+      try{
+        await navigator.clipboard.writeText(link);
+        alert("Link copied");
+      }catch(err){
+        window.prompt("Copy link berikut:",link);
+      }
+    };
+  }
+
+  try{
+    const rows=await rpc(
+      "mvp_get_unified_transaction",
+      {p_token:token}
+    );
+
+    if(!rows||!rows.length){
+      throw new Error(
+        "Transaksi tidak ditemukan."
+      );
+    }
+
+    draw(rows[0]);
+  }catch(err){
+    screen(`
+      <section class="card">
+        <h1>Error</h1>
+        <div class="error">${safeError(err)}</div>
+      </section>
+    `);
+    return;
+  }
+
+  const interval=setInterval(async()=>{
+    const box=byId("unified-waiting-status");
+
+    if(!box){
+      clearInterval(interval);
+      return;
+    }
+
+    try{
+      const rows=await rpc(
+        "mvp_get_unified_transaction",
+        {p_token:token}
+      );
+
+      const request=rows&&rows[0];
+
+      if(!request)return;
+
+      if(request.status==="approved"){
+        box.className="success";
+        box.innerHTML="Status: Approved ✅";
+
+        setTimeout(()=>{
+          setHash("unified-success",{token});
+        },700);
+
+        clearInterval(interval);
+      }else if(
+        request.status==="rejected"||
+        request.status==="expired"
+      ){
+        box.className="error";
+        box.innerHTML=
+          `Status: ${String(
+            request.status
+          ).toUpperCase()}`;
+
+        clearInterval(interval);
+      }else{
+        box.className="notice";
+        box.innerHTML=
+          `Status: ${esc(request.status)}`;
+      }
+    }catch(err){
+      console.warn(err);
+    }
+  },2500);
+}
 function customerTopupInfoHtml(){
   return `
     <section class="card">
@@ -853,167 +1622,407 @@ function customerTopupInfoHtml(){
   `;
 }
 
-async function renderCustomerHome(){
+
+async function renderApproveTransaction(){
   const {params}=getRoute();
   const token=params.token;
-  byId("app").innerHTML=`<main style="padding:16px;max-width:560px;margin:auto"></main>`;
-  const target=document.querySelector("main");
-  target.innerHTML=`<section class="card"><h1>Loading customer home...</h1></section>`;
-  try{
-    if(!token) throw new Error("Customer token tidak ditemukan.");
-    const rows=await rpc("mvp_get_approval",{p_token:token});
-    if(!rows||!rows.length) throw new Error("Data customer tidak ditemukan.");
-    const p=rows[0];
-    const saldo = p.balance_after ?? p.balance_before ?? 0;
-    target.innerHTML=`
-      <section class="card">
-        ${brandMiniHtml()}
-        <div class="customer-home-header">
-          <h1>${OUTLET_FULL}</h1>
-          <p>${esc(p.member_name || "Member")} • ${esc(p.member_phone || "")}</p>
-        </div>
-        <div class="kpi"><div class="label">Saldo Saat Ini</div><div class="value">${money(saldo)}</div></div>
-        <div class="notice" style="margin-top:12px">Ini adalah halaman customer. Untuk pembayaran/top up, tetap hubungi kasir.</div>
-      </section>
-      ${customerTopupInfoHtml()}
-    `;
-  }catch(err){
-    target.innerHTML=`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`;
-  }
-}
 
-async function renderApprove(){
-  const {params}=getRoute();const token=params.token;
-  byId("app").innerHTML=`<main class="customer-shell"></main>`;
+  byId("app").innerHTML=`
+    <main class="customer-shell"></main>`;
+
   const target=document.querySelector("main");
-  target.innerHTML=`<div class="empty-state">Memuat transaksi...</div>`;
+
+  target.innerHTML=`
+    <div class="empty-state">
+      Memuat transaksi...
+    </div>`;
+
   try{
-    const rows=await rpc("mvp_get_approval",{p_token:token});
-    if(!rows||!rows.length)throw new Error("Transaksi tidak ditemukan.");
+    const rows=await rpc(
+      "mvp_get_unified_transaction",
+      {p_token:token}
+    );
+
+    if(!rows||!rows.length){
+      throw new Error(
+        "Transaksi tidak ditemukan."
+      );
+    }
+
     const request=rows[0];
+
+    if(request.status!=="waiting"){
+      throw new Error(
+        `Transaksi sudah ${request.status}.`
+      );
+    }
+
+    const items=normalizeJsonArray(request.items);
+
     let pin="";
+
     target.innerHTML=`
-      <section class="customer-confirm-card">
+      <section class="customer-confirm-card unified-customer-confirm">
         ${brandMiniHtml()}
-        <button class="back-button customer-back" onclick="setHash('customer-login')">←</button>
-        <h1>Gunakan Saldo</h1><div class="confirm-amount">${money(request.balance_used)}</div>
+
+        <button class="back-button customer-back"
+          onclick="setHash('customer-login')">
+          ←
+        </button>
+
+        <h1>Konfirmasi Transaksi</h1>
+
+        <div class="customer-reference-strip">
+          <span>Bill ${esc(request.invoice_number||"-")}</span>
+          <b>${esc(request.reference_code||"-")}</b>
+        </div>
+
+        ${Number(request.balance_used||0)>0
+          ? `<div class="customer-confirm-benefit">
+              <span>Saldo yang digunakan</span>
+              <strong>${money(request.balance_used)}</strong>
+              <small>
+                Sisa saldo ${money(request.balance_after||0)}
+              </small>
+            </div>`
+          : ""}
+
+        ${items.length
+          ? `<div class="customer-confirm-items">
+              <h3>Gift Item</h3>
+              ${items.map(item=>`
+                <div>
+                  <span>${esc(item.item_name||"Gift Item")}</span>
+                  <b>${Number(item.quantity||0)}×</b>
+                </div>
+              `).join("")}
+            </div>`
+          : ""}
+
+        <div class="unified-atomic-note">
+          Saldo dan seluruh Gift Item akan diproses bersamaan
+          setelah PIN benar.
+        </div>
+
         <p>Masukkan PIN Anda</p>
-        <div class="pin-dots" id="pin-dots">${Array.from({length:6},()=>'<i></i>').join('')}</div>
-        <div class="numeric-keypad" aria-label="Keypad PIN">
-          ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" data-pin="${n}" aria-label="Angka ${n}">${n}</button>`).join('')}
-          <button type="button" class="key-clear" aria-label="Hapus seluruh PIN">C</button>
-          <button type="button" data-pin="0" aria-label="Angka 0">0</button>
-          <button type="button" class="key-back" aria-label="Hapus satu angka">⌫</button>
+
+        <div class="pin-dots" id="unified-pin-dots">
+          ${Array.from(
+            {length:6},
+            ()=>"<i></i>"
+          ).join("")}
         </div>
-        <button class="full touch-button" id="approve-pin-button" disabled>Approve</button>
-        <button class="text-button" id="rejectBtn">Tolak Transaksi</button>
-        <div id="approve-result"></div>
-      </section>`;
-    const dots=()=>document.querySelectorAll("#pin-dots i").forEach((dot,index)=>dot.classList.toggle("filled",index<pin.length));
-    document.querySelectorAll("[data-pin]").forEach(button=>button.onclick=()=>{if(pin.length<6){pin+=button.dataset.pin;dots();byId("approve-pin-button").disabled=pin.length!==6;}});
-    document.querySelector(".key-clear").onclick=()=>{pin="";dots();byId("approve-pin-button").disabled=true;};
-    document.querySelector(".key-back").onclick=()=>{pin=pin.slice(0,-1);dots();byId("approve-pin-button").disabled=pin.length!==6;};
-    byId("rejectBtn").onclick=async()=>{try{await rpc("mvp_reject_approval",{p_token:token});byId("approve-result").innerHTML=`<div class="error">Transaksi ditolak.</div>`;}catch(err){byId("approve-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}};
-    byId("approve-pin-button").onclick=async()=>{
-      const box=byId("approve-result");box.innerHTML=`<div class="notice">Memproses...</div>`;byId("approve-pin-button").disabled=true;
-      try{
-        const approvalRows=await rpc("mvp_approve_balance_use",{p_token:token,p_password:pin});
-        const result=approvalRows&&approvalRows[0]?approvalRows[0]:{};
-        if(result.approval_success===false){box.innerHTML=`<div class="error">${esc(result.error_message||'PIN salah.')}</div>`;pin="";dots();return;}
-        target.innerHTML=`<section class="customer-confirm-card success-transition">${brandMiniHtml()}<div class="success-check">✓</div><h1>Transaksi Berhasil</h1><div class="confirm-amount">${money(request.balance_used)}</div><p>Sisa saldo ${money(result.balance_after??request.balance_after??0)}</p></section>`;
-        setTimeout(()=>setHash("promo",{token}),900);
-      }catch(err){box.innerHTML=`<div class="error">${safeError(err)}</div>`;pin="";dots();}
+
+        <div class="numeric-keypad"
+          aria-label="Keypad PIN">
+          ${[1,2,3,4,5,6,7,8,9]
+            .map(number=>`
+              <button type="button"
+                data-unified-pin="${number}"
+                aria-label="Angka ${number}">
+                ${number}
+              </button>
+            `).join("")}
+
+          <button type="button"
+            class="unified-key-clear"
+            aria-label="Hapus seluruh PIN">
+            C
+          </button>
+
+          <button type="button"
+            data-unified-pin="0"
+            aria-label="Angka 0">
+            0
+          </button>
+
+          <button type="button"
+            class="unified-key-back"
+            aria-label="Hapus satu angka">
+            ⌫
+          </button>
+        </div>
+
+        <button class="full touch-button"
+          id="approve-unified-button"
+          disabled>
+          APPROVE
+        </button>
+
+        <button class="text-button"
+          id="reject-unified-button">
+          Tolak Transaksi
+        </button>
+
+        <div id="approve-unified-result"></div>
+      </section>
+    `;
+
+    const drawDots=()=>{
+      document.querySelectorAll(
+        "#unified-pin-dots i"
+      ).forEach((dot,index)=>{
+        dot.classList.toggle(
+          "filled",
+          index<pin.length
+        );
+      });
     };
-  }catch(err){target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div></section>`;}
-}
 
+    document.querySelectorAll("[data-unified-pin]")
+      .forEach(button=>{
+        button.onclick=()=>{
+          if(pin.length<6){
+            pin+=button.dataset.unifiedPin;
+            drawDots();
 
-async function renderApproveItem(){
-  const {params}=getRoute();
-  const token=params.token;
-  byId("app").innerHTML=`<main class="customer-shell"></main>`;
-  const target=document.querySelector("main");
-  target.innerHTML=`<div class="empty-state">Memuat Gift Item...</div>`;
+            byId(
+              "approve-unified-button"
+            ).disabled=pin.length!==6;
+          }
+        };
+      });
 
-  try{
-    const rows=await rpc("mvp_get_item_redemption",{p_token:token});
-    if(!rows||!rows.length)throw new Error("Approval Gift Item tidak ditemukan.");
-    const request=rows[0];
-    if(request.request_status!=="waiting")throw new Error(`Approval sudah ${request.request_status}.`);
-    let pin="";
+    document.querySelector(
+      ".unified-key-clear"
+    ).onclick=()=>{
+      pin="";
+      drawDots();
 
-    target.innerHTML=`<section class="customer-confirm-card">
-      ${brandMiniHtml()}
-      <h1>Gunakan Gift Item</h1>
-      <div class="reward-item-preview compact">
-        ${request.item_image_data_url?`<img src="${request.item_image_data_url}" alt="${esc(request.item_name||"Gift Item")}"/>`:""}
-        <h2>${esc(request.item_name||"Gift Item")}</h2>
-        <p>${esc(request.item_description||"")}</p>
-        <div class="gift-item-expiry"><b>ED ${dateID(request.item_expires_at)}</b><span>${esc(giftItemCountdown(request.days_remaining))}</span></div>
-      </div>
-      <p>Masukkan PIN Anda</p>
-      <div class="pin-dots" id="item-pin-dots">${Array.from({length:6},()=>'<i></i>').join('')}</div>
-      <div class="numeric-keypad" aria-label="Keypad PIN">
-        ${[1,2,3,4,5,6,7,8,9].map(n=>`<button type="button" data-item-pin="${n}">${n}</button>`).join('')}
-        <button type="button" class="item-key-clear">C</button>
-        <button type="button" data-item-pin="0">0</button>
-        <button type="button" class="item-key-back">⌫</button>
-      </div>
-      <button class="full touch-button" id="approve-item-button" disabled>Gunakan Item</button>
-      <button class="text-button" id="reject-item-button">Batalkan</button>
-      <div id="approve-item-result"></div>
-    </section>`;
-
-    const dots=()=>document.querySelectorAll("#item-pin-dots i").forEach((dot,index)=>dot.classList.toggle("filled",index<pin.length));
-    document.querySelectorAll("[data-item-pin]").forEach(button=>button.onclick=()=>{
-      if(pin.length<6){
-        pin+=button.dataset.itemPin;
-        dots();
-        byId("approve-item-button").disabled=pin.length!==6;
-      }
-    });
-    document.querySelector(".item-key-clear").onclick=()=>{pin="";dots();byId("approve-item-button").disabled=true;};
-    document.querySelector(".item-key-back").onclick=()=>{pin=pin.slice(0,-1);dots();byId("approve-item-button").disabled=pin.length!==6;};
-    byId("reject-item-button").onclick=async()=>{
-      try{
-        await rpc("mvp_reject_item_redemption",{p_token:token});
-        byId("approve-item-result").innerHTML=`<div class="error">Penggunaan item dibatalkan.</div>`;
-      }catch(err){byId("approve-item-result").innerHTML=`<div class="error">${safeError(err)}</div>`;}
+      byId(
+        "approve-unified-button"
+      ).disabled=true;
     };
-    byId("approve-item-button").onclick=async()=>{
-      const box=byId("approve-item-result");
-      const approveButton=byId("approve-item-button");
-      approveButton.disabled=true;
-      box.innerHTML=`<div class="notice">Memproses...</div>`;
-      try{
-        const resultRows=await rpc("mvp_approve_item_redemption",{
-          p_token:token,
-          p_password:pin
-        });
-        const result=resultRows&&resultRows[0]?resultRows[0]:{};
-        if(result.approval_success===false){
-          box.innerHTML=`<div class="error">${esc(result.error_message||"PIN salah.")}</div>`;
-          pin="";
-          dots();
-          return;
+
+    document.querySelector(
+      ".unified-key-back"
+    ).onclick=()=>{
+      pin=pin.slice(0,-1);
+      drawDots();
+
+      byId(
+        "approve-unified-button"
+      ).disabled=pin.length!==6;
+    };
+
+    byId("reject-unified-button").onclick=
+      async()=>{
+        const box=byId("approve-unified-result");
+
+        try{
+          await rpc(
+            "mvp_reject_unified_transaction",
+            {p_token:token}
+          );
+
+          box.innerHTML=`
+            <div class="error">
+              Transaksi ditolak. Saldo dan Gift Item tidak berubah.
+            </div>`;
+
+          byId("approve-unified-button").disabled=true;
+          byId("reject-unified-button").disabled=true;
+        }catch(err){
+          box.innerHTML=`
+            <div class="error">${safeError(err)}</div>`;
         }
-        target.innerHTML=`<section class="customer-confirm-card success-transition">${brandMiniHtml()}<div class="success-check">✓</div><h1>Gift Item Berhasil Digunakan</h1><h2>${esc(request.item_name||"Gift Item")}</h2></section>`;
-        setTimeout(()=>setHash("promo",{token,kind:"item"}),900);
-      }catch(err){
-        box.innerHTML=`<div class="error">${safeError(err)}</div>`;
-        pin="";
-        dots();
-      }
-    };
+      };
+
+    byId("approve-unified-button").onclick=
+      async()=>{
+        const box=byId("approve-unified-result");
+        const button=byId(
+          "approve-unified-button"
+        );
+
+        button.disabled=true;
+
+        box.innerHTML=`
+          <div class="notice">
+            Memproses seluruh benefit...
+          </div>`;
+
+        try{
+          const approvalRows=await rpc(
+            "mvp_approve_unified_transaction",
+            {
+              p_token:token,
+              p_password:pin
+            }
+          );
+
+          const result=approvalRows&&approvalRows[0]
+            ? approvalRows[0]
+            : {};
+
+          if(result.approval_success===false){
+            box.innerHTML=`
+              <div class="error">
+                ${esc(
+                  result.error_message||
+                  "PIN salah."
+                )}
+              </div>`;
+
+            pin="";
+            drawDots();
+            return;
+          }
+
+          const approvedItems=normalizeJsonArray(
+            result.items
+          ).length
+            ? normalizeJsonArray(result.items)
+            : items;
+
+          target.innerHTML=`
+            <section class="customer-confirm-card success-transition">
+              ${brandMiniHtml()}
+
+              <div class="success-check">✓</div>
+              <h1>Transaksi Berhasil</h1>
+
+              ${Number(request.balance_used||0)>0
+                ? `<div class="confirm-amount">
+                    ${money(request.balance_used)}
+                  </div>
+                  <p>
+                    Sisa saldo
+                    ${money(result.balance_after||0)}
+                  </p>`
+                : ""}
+
+              ${approvedItems.length
+                ? `<div class="customer-confirm-items success-items">
+                    ${approvedItems.map(item=>`
+                      <div>
+                        <span>${esc(
+                          item.item_name||"Gift Item"
+                        )}</span>
+                        <b>${Number(
+                          item.quantity||0
+                        )}×</b>
+                      </div>
+                    `).join("")}
+                  </div>`
+                : ""}
+            </section>`;
+
+          setTimeout(()=>{
+            setHash("promo",{
+              token,
+              kind:"unified"
+            });
+          },900);
+        }catch(err){
+          box.innerHTML=`
+            <div class="error">${safeError(err)}</div>`;
+
+          pin="";
+          drawDots();
+        }
+      };
   }catch(err){
-    target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div></section>`;
+    target.innerHTML=`
+      <section class="customer-login-card">
+        ${brandMiniHtml()}
+        <div class="error">${safeError(err)}</div>
+      </section>`;
   }
 }
 
-async function renderSuccess(){
-  const u=requireLogin(); if(!u) return; mountLayout(); setNav("kasir"); const {params}=getRoute(); try{ const rows=await rpc("mvp_get_approval",{p_token:params.token}); const p=rows&&rows[0]; if(!p) throw new Error("Approval not found"); screen(`<section class="card"><h1>Saldo Berhasil Dipakai ✅</h1><div class="item"><div class="title">Member</div><div class="meta">${esc(p.member_name)} • ${esc(p.member_phone)}</div></div><div class="item"><div class="title">Saldo Dipakai</div><div class="meta">${money(p.balance_used)}</div></div><div class="item"><div class="title">Saldo Sisa</div><div class="meta">${money(p.balance_after)}</div></div><div class="notice">Kasir tetap validasi manual di POS: masukkan payment Voucher/Member Dining sebesar ${money(p.balance_used)}. Sisa bill, kalau ada, dibayar QRIS/Cash/Card di POS.</div><button class="full" style="margin-top:12px" onclick="setHash('kasir')">Transaksi Baru</button></section>`); }catch(err){ screen(`<section class="card"><h1>Error</h1><div class="error">${safeError(err)}</div></section>`); }
-}
+async function renderUnifiedSuccess(){
+  const user=requireLogin();
+  if(!user)return;
 
+  mountLayout();
+  setNav("kasir");
+
+  const {params}=getRoute();
+
+  try{
+    const rows=await rpc(
+      "mvp_get_unified_transaction",
+      {p_token:params.token}
+    );
+
+    const request=rows&&rows[0];
+
+    if(!request){
+      throw new Error("Transaksi tidak ditemukan.");
+    }
+
+    const items=normalizeJsonArray(request.items);
+
+    screen(`
+      <section class="tablet-page">
+        ${staffPageHeader(
+          "Transaksi Berhasil",
+          "transaction",
+          request.reference_code||""
+        )}
+
+        <section class="surface-card unified-success-card">
+          <div class="success-check">✓</div>
+          <h1>Approval Customer Berhasil</h1>
+
+          <div class="unified-detail-grid">
+            <div>
+              <span>Member</span>
+              <b>${esc(request.member_name||"-")}</b>
+            </div>
+            <div>
+              <span>Bill / Invoice</span>
+              <b>${esc(request.invoice_number||"-")}</b>
+            </div>
+            <div>
+              <span>Saldo Dipakai</span>
+              <b>${money(request.balance_used||0)}</b>
+            </div>
+            <div>
+              <span>Saldo Sisa</span>
+              <b>${money(request.balance_after||0)}</b>
+            </div>
+          </div>
+
+          ${items.length
+            ? `<h3>Gift Item Digunakan</h3>
+              ${unifiedItemSummaryHtml(items)}`
+            : ""}
+
+          <div class="notice">
+            Cocokkan referensi
+            <b>${esc(request.reference_code||"-")}</b>
+            dan Bill
+            <b>${esc(request.invoice_number||"-")}</b>
+            pada POS restoran.
+          </div>
+
+          <button class="full touch-button"
+            onclick="setHash('transaction')">
+            Transaksi Baru
+          </button>
+
+          <button class="ghost full"
+            style="margin-top:8px"
+            onclick="setHash(
+              'member',
+              {phone:'${esc(request.member_phone||"")}'}
+            )">
+            Lihat Member
+          </button>
+        </section>
+      </section>
+    `);
+  }catch(err){
+    screen(`
+      <section class="card">
+        <h1>Error</h1>
+        <div class="error">${safeError(err)}</div>
+      </section>
+    `);
+  }
+}
 async function renderOwner(){
   const user=requireLogin();if(!user)return;
   if(user.role!=="owner"){setHash("kasir");return;}
@@ -2555,25 +3564,98 @@ async function renderPromoManage(){
 async function renderPromo(){
   const {params}=getRoute();
   const token=params.token;
-  const kind=params.kind==="item"?"item":"balance";
-  byId("app").innerHTML=`<main class="customer-shell promo-customer-shell"></main>`;
+
+  byId("app").innerHTML=`
+    <main class="customer-shell promo-customer-shell"></main>`;
+
   const target=document.querySelector("main");
+
   try{
-    const transactionPromise=kind==="item"
-      ? rpc("mvp_get_item_redemption",{p_token:token})
-      : rpc("mvp_get_approval",{p_token:token});
     const [transactionRows,promoRows]=await Promise.all([
-      transactionPromise,
-      rpc("mvp_get_active_promo",{p_outlet_slug:OUTLET_SLUG})
+      rpc(
+        "mvp_get_unified_transaction",
+        {p_token:token}
+      ),
+      rpc(
+        "mvp_get_active_promo",
+        {p_outlet_slug:OUTLET_SLUG}
+      )
     ]);
-    const transaction=transactionRows&&transactionRows[0]?transactionRows[0]:{};
-    const promo=promoRows&&promoRows[0]?promoRows[0]:null;
-    const detail=kind==="item"
-      ? `${transaction.item_name||"Gift Item"}`
-      : `${money(transaction.balance_used||0)} • Sisa saldo ${money(transaction.balance_after||0)}`;
-    target.innerHTML=`<section class="promo-customer-card">${brandMiniHtml()}<div class="transaction-success-strip"><span>✓</span><div><b>Transaksi Berhasil</b><small>${esc(detail)}</small></div></div>${promo&&promo.image_data_url?`<img class="promo-customer-image" src="${promo.image_data_url}" alt="${esc(promo.title||"Promo")}"/><h1>${esc(promo.title||"Promo Spesial")}</h1><p>${esc(promo.caption||"")}</p>`:`<div class="no-promo-state"><div class="success-check">✓</div><h1>Terima Kasih</h1><p>Transaksi Anda telah selesai.</p></div>`}<button class="full touch-button" onclick="setHash('customer-login')">Selesai</button></section>`;
+
+    const transaction=transactionRows&&transactionRows[0]
+      ? transactionRows[0]
+      : {};
+
+    const items=normalizeJsonArray(transaction.items);
+
+    const promo=promoRows&&promoRows[0]
+      ? promoRows[0]
+      : null;
+
+    const parts=[];
+
+    if(Number(transaction.balance_used||0)>0){
+      parts.push(
+        `Saldo ${money(transaction.balance_used)}`
+      );
+    }
+
+    if(items.length){
+      parts.push(
+        items.map(item=>
+          `${Number(item.quantity||0)}× ${
+            item.item_name||"Gift Item"
+          }`
+        ).join(", ")
+      );
+    }
+
+    const detail=parts.join(" • ")||
+      "Transaksi member";
+
+    target.innerHTML=`
+      <section class="promo-customer-card">
+        ${brandMiniHtml()}
+
+        <div class="transaction-success-strip">
+          <span>✓</span>
+          <div>
+            <b>Transaksi Berhasil</b>
+            <small>${esc(detail)}</small>
+          </div>
+        </div>
+
+        ${promo&&promo.image_data_url
+          ? `<img class="promo-customer-image"
+              src="${promo.image_data_url}"
+              alt="${esc(promo.title||"Promo")}"/>
+
+            <h1>${esc(
+              promo.title||"Promo Spesial"
+            )}</h1>
+
+            <p>${esc(promo.caption||"")}</p>`
+          : `<div class="no-promo-state">
+              <div class="success-check">✓</div>
+              <h1>Terima Kasih</h1>
+              <p>Transaksi Anda telah selesai.</p>
+            </div>`}
+
+        <button class="full touch-button"
+          onclick="setHash('customer-login')">
+          Selesai
+        </button>
+      </section>`;
   }catch(err){
-    target.innerHTML=`<section class="customer-login-card">${brandMiniHtml()}<div class="error">${safeError(err)}</div><button class="full" onclick="setHash('customer-login')">Selesai</button></section>`;
+    target.innerHTML=`
+      <section class="customer-login-card">
+        ${brandMiniHtml()}
+        <div class="error">${safeError(err)}</div>
+        <button class="full"
+          onclick="setHash('customer-login')">
+          Selesai
+        </button>
+      </section>`;
   }
 }
 async function renderReport(){
@@ -2595,9 +3677,9 @@ async function renderReport(){
     const totalTopup=rows.reduce((sum,row)=>sum+Number(row.credit_issued||0),0);const totalUsed=rows.reduce((sum,row)=>sum+Number(row.balance_used||0),0);
     byId("report-summary").innerHTML=`<div><small>Transaksi</small><b>${rows.length}</b></div><div><small>Saldo Masuk</small><b>${money(totalTopup)}</b></div><div><small>Saldo Dipakai</small><b>${money(totalUsed)}</b></div>`;
     const groups=groupRows();const keys=Object.keys(groups).sort().reverse();
-    byId("report-list").innerHTML=keys.length?keys.map(date=>`<section class="daily-report-group"><header><b>${new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</b><span>${groups[date].length} transaksi</span></header>${groups[date].map(row=>`<div class="report-row"><span class="report-time">${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span><b>${esc(typeLabel(row.type))}</b><small>${esc(row.member_name||'-')} • ${esc(row.member_phone||'-')}</small></span><strong class="${row.type==='use_balance'?'minus':'plus'}">${row.type==='gift_item_claim'||row.type==='gift_item_redeem'?'1 Item':`${row.type==='use_balance'?'-':'+'}${money(row.type==='use_balance'?row.balance_used:row.credit_issued)}`}</strong><span class="status-dot">${esc(row.status||'approved')}</span></div>`).join('')}</section>`).join(''):`<div class="empty-state">Belum ada transaksi pada periode ini.</div>`;
+    byId("report-list").innerHTML=keys.length?keys.map(date=>`<section class="daily-report-group"><header><b>${new Date(date+'T00:00:00').toLocaleDateString('id-ID',{weekday:'long',day:'2-digit',month:'long',year:'numeric'})}</b><span>${groups[date].length} transaksi</span></header>${groups[date].map(row=>`<div class="report-row"><span class="report-time">${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span><b>${esc(typeLabel(row.type))}</b><small>${esc(row.member_name||'-')} • ${esc(row.member_phone||'-')}${row.invoice_number?` • Bill ${esc(row.invoice_number)}`:""}${row.reference_code?` • ${esc(row.reference_code)}`:""}${row.item_name?` • ${esc(row.item_name)}`:""}</small></span><strong class="${row.type==='use_balance'?'minus':'plus'}">${row.type==='gift_item_claim'||row.type==='gift_item_redeem'?'1 Item':`${row.type==='use_balance'?'-':'+'}${money(row.type==='use_balance'?row.balance_used:row.credit_issued)}`}</strong><span class="status-dot">${esc(row.status||'approved')}</span></div>`).join('')}</section>`).join(''):`<div class="empty-state">Belum ada transaksi pada periode ini.</div>`;
   }
-  async function load(){byId("report-list").innerHTML=`<div class="empty-state">Loading...</div>`;try{rows=await rpc("s4_staff_transactions_by_date",{p_staff_session_token:user.session_token,p_date_from:byId("report-from").value,p_date_to:byId("report-to").value,p_type:byId("report-type").value})||[];draw();}catch(err){byId("report-list").innerHTML=`<div class="error">${safeError(err)}</div>`;}}
+  async function load(){byId("report-list").innerHTML=`<div class="empty-state">Loading...</div>`;try{rows=await rpc("s42_staff_transactions_by_date",{p_staff_session_token:user.session_token,p_date_from:byId("report-from").value,p_date_to:byId("report-to").value,p_type:byId("report-type").value})||[];draw();}catch(err){byId("report-list").innerHTML=`<div class="error">${safeError(err)}</div>`;}}
   byId("report-load").onclick=load;
   byId("report-pdf").onclick=()=>{const groups=groupRows();const html=`<!doctype html><html><head><title>${OUTLET} Transaction Report</title><style>body{font-family:Arial;padding:28px;color:#17211a}h1{margin:0}.day{margin-top:22px;border-top:2px solid #245c38;padding-top:10px}.row{display:grid;grid-template-columns:80px 1fr 140px;padding:8px 0;border-bottom:1px solid #ddd}.amount{text-align:right;font-weight:bold}</style></head><body><h1>${OUTLET} — History Transaksi</h1><p>${byId('report-from').value} s/d ${byId('report-to').value}</p>${Object.keys(groups).sort().reverse().map(date=>`<div class="day"><h3>${date}</h3>${groups[date].map(row=>`<div class="row"><span>${new Date(row.created_at).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'})}</span><span>${esc(typeLabel(row.type))} — ${esc(row.member_name||'-')}</span><span class="amount">${row.type==='gift_item_claim'||row.type==='gift_item_redeem'?'1 Item':money(row.type==='use_balance'?row.balance_used:row.credit_issued)}</span></div>`).join('')}</div>`).join('')}<script>window.onload=()=>window.print();</script></body></html>`;const w=window.open('','_blank');if(!w){alert('Popup diblokir browser.');return;}w.document.write(html);w.document.close();};
   await load();
@@ -2720,8 +3802,8 @@ async function renderCustomerResetHome(){
 
 function route(){
   const {name}=getRoute();
-  const staffRoutes=new Set(["login","owner","owner-summary","transaction","promo-manage","members","gift-generate","report","kasir","member","register","join","topup","use-balance","waiting","success"]);
-  const customerRoutes=new Set(["customer-login","customer-portal","register","join","claim-gift","approve","approve-item","promo","customer-home","reset-pin","customer-reset-home"]);
+  const staffRoutes=new Set(["login","owner","owner-summary","transaction","promo-manage","members","gift-generate","report","kasir","member","register","join","topup","use-benefits","unified-waiting","unified-success"]);
+  const customerRoutes=new Set(["customer-login","customer-portal","register","join","claim-gift","approve-transaction","promo","reset-pin","customer-reset-home"]);
   if(PORTAL_MODE==="staff" && !staffRoutes.has(name)){ setHash("login"); return; }
   if(PORTAL_MODE==="customer" && !customerRoutes.has(name)){ setHash("customer-login"); return; }
   if(name==="login")return renderLogin();
@@ -2735,15 +3817,13 @@ function route(){
   if(name==="member")return renderMember();
   if(name==="register"||name==="join")return renderJoin();
   if(name==="topup")return renderTopup();
-  if(name==="use-balance")return renderUseBalance();
-  if(name==="waiting")return renderWaiting();
-  if(name==="approve")return renderApprove();
-  if(name==="approve-item")return renderApproveItem();
+  if(name==="use-benefits")return renderUseBenefits();
+  if(name==="unified-waiting")return renderUnifiedWaiting();
+  if(name==="approve-transaction")return renderApproveTransaction();
   if(name==="promo")return renderPromo();
-  if(name==="customer-home")return renderCustomerHome();
   if(name==="customer-reset-home")return renderCustomerResetHome();
   if(name==="reset-pin")return renderResetPin();
-  if(name==="success")return renderSuccess();
+  if(name==="unified-success")return renderUnifiedSuccess();
   if(name==="owner")return renderOwner();
   if(name==="members")return renderMembers();
   if(name==="gift-generate")return renderGiftGenerate();

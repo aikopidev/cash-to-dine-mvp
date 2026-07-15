@@ -422,3 +422,13 @@ Member Directory:
 - Generated codes automatically open their matching control.
 - Lightweight code-list RPC removes repeated Base64 image payload.
 - Run `cacayo-member-system-v411-reward-control-fix.sql` after v4.1.0.
+
+
+## v4.2.0 Unified Transaction
+- One staff flow supports balance, Gift Item, or both.
+- One mandatory POS Bill / Invoice.
+- One QR and one customer PIN.
+- Atomic approval: no partial balance/item processing.
+- Multiple copies use earliest-expiry entitlements first.
+- Separate legacy approval UI and RPC endpoints are removed.
+- Run `cacayo-member-system-v420-unified-transaction.sql`.
